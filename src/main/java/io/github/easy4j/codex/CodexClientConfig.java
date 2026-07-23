@@ -1,4 +1,4 @@
-package io.github.hiwepy.codex;
+package io.github.easy4j.codex;
 
 import lombok.Data;
 

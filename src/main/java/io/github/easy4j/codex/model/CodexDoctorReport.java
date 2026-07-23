@@ -1,4 +1,4 @@
-package io.github.hiwepy.codex.model;
+package io.github.easy4j.codex.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;

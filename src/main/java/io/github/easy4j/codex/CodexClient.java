@@ -1,14 +1,14 @@
-package io.github.hiwepy.codex;
+package io.github.easy4j.codex;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.hiwepy.codex.cli.CodexCli;
-import io.github.hiwepy.codex.cli.CodexCliExecutor;
-import io.github.hiwepy.codex.cli.CodexCliResult;
-import io.github.hiwepy.codex.model.CodexDoctorReport;
-import io.github.hiwepy.codex.model.CodexEvent;
-import io.github.hiwepy.codex.model.CodexSession;
+import io.github.easy4j.codex.cli.CodexCli;
+import io.github.easy4j.codex.cli.CodexCliExecutor;
+import io.github.easy4j.codex.cli.CodexCliResult;
+import io.github.easy4j.codex.model.CodexDoctorReport;
+import io.github.easy4j.codex.model.CodexEvent;
+import io.github.easy4j.codex.model.CodexSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
