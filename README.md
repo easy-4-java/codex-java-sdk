@@ -1,6 +1,8 @@
 # codex-java-sdk
 
-[![Java](https://img.shields.io/badge/Java-8-orange)] [![License](https://img.shields.io/badge/license-Apache%202.0-green)](https://www.apache.org/licenses/LICENSE-2.0.txt)
+[English](./README.md) | [简体中文](./README.zh-CN.md)
+
+[![License](https://img.shields.io/badge/license-Apache%202.0-green)
 
 > Java SDK for the [Codex CLI](https://github.com/openai/codex): subprocess
 > integration that drives the local `codex` agent (exec, interactive sessions,

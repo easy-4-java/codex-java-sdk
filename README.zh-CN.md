@@ -1,6 +1,8 @@
 # codex-java-sdk
 
-[![Java](https://img.shields.io/badge/Java-8-orange)] [![License](https://img.shields.io/badge/license-Apache%202.0-green)](https://www.apache.org/licenses/LICENSE-2.0.txt)
+[English](./README.md) | [简体中文](./README.zh-CN.md)
+
+[![License](https://img.shields.io/badge/license-Apache%202.0-green)
 
 > [Codex CLI](https://github.com/openai/codex) 的 Java SDK：通过子进程集成驱动本地
 > `codex` 智能体（exec 非交互执行、交互会话、会话 resume / fork / archive、
@@ -19,8 +21,6 @@
 - [9. 测试与构建](#9-测试与构建)
 - [10. 版本与分支](#10-版本与分支)
 - [11. 贡献与许可](#11-贡献与许可)
-
-[English](./README.md) | [简体中文](./README.zh-CN.md)
 
 ## 1. 项目概述
 
