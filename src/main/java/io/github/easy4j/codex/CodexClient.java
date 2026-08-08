@@ -1,3 +1,18 @@
+/*
+ * Copyright (c) 2018-present, easy-4-java (https://github.com/easy-4-java).
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.github.easy4j.codex;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -18,12 +33,30 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Codex 客户端门面，封装本地 CLI 子进程调用。
+ * High-level Java facade that wraps every local {@code codex} CLI invocation
+ * behind ergonomic, strongly-typed methods.
  *
- * <h3>Session 管理</h3>
- * Codex 将 session 保存为文件（在 {@code ~/.codex/} 中），
- * 通过 {@code resume}/{@code fork}/{@code archive} 子命令管理。
- * 本 SDK 通过调用这些子命令来实现 session 生命周期管理。
+ * <p>This class is the recommended entry point for application code. It owns
+ * a single {@link CodexClientConfig} and a single {@link CodexCli}, forwarding
+ * the configured defaults to every call so that callers only need to supply
+ * the call-specific overrides (e.g. the prompt or output file).</p>
+ *
+ * <h3>Session management</h3>
+ * <p>Codex persists sessions as files under {@code ~/.codex/} and exposes
+ * session lifecycle through the {@code resume} / {@code fork} / {@code archive}
+ * sub-commands. This SDK models each of those sub-commands as a Java method
+ * so application code does not have to reason about CLI spelling.</p>
+ *
+ * <h3>JSON-Lines parsing</h3>
+ * <p>{@link #execAndParse(String)} runs {@code codex exec --json <prompt>} and
+ * decodes the standard output into a {@code List<CodexEvent>} using a private
+ * Jackson {@link ObjectMapper} that ignores unknown properties.</p>
+ *
+ * @author [@Loong Wan](https://github.com/loong10k)
+ * @since 3.0.0
+ * @see CodexClientConfig
+ * @see CodexCli
+ * @see CodexCliResult
  */
 public class CodexClient implements AutoCloseable {
 
@@ -34,231 +67,493 @@ public class CodexClient implements AutoCloseable {
     private final CodexClientConfig config;
     private final CodexCli cli;
 
+    /**
+     * Creates a new client backed by the given configuration. A default
+     * {@link CodexCli} and {@link CodexCliExecutor} are constructed
+     * automatically.
+     *
+     * @param config runtime configuration; must not be {@code null}.
+     * @throws NullPointerException if {@code config} is {@code null}.
+     */
     public CodexClient(CodexClientConfig config) {
         this.config = Objects.requireNonNull(config, "config");
         this.cli = new CodexCli(new CodexCliExecutor(config));
     }
 
+    /**
+     * Creates a new client that delegates to the supplied {@link CodexCli}.
+     *
+     * <p>This constructor exists primarily for testing &mdash; it lets a
+     * caller substitute a {@link CodexCli} backed by a mocked executor while
+     * still using the default behaviour of the surrounding facade.</p>
+     *
+     * @param config runtime configuration; must not be {@code null}.
+     * @param cli    the CLI facade to delegate to; must not be {@code null}.
+     * @throws NullPointerException if either argument is {@code null}.
+     */
     public CodexClient(CodexClientConfig config, CodexCli cli) {
         this.config = Objects.requireNonNull(config, "config");
         this.cli = Objects.requireNonNull(cli, "cli");
     }
 
     // ============================================================
-    // 基本信息
+    // Basic info
     // ============================================================
 
+    /**
+     * Runs {@code codex --version}.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult version() { return cli.version(); }
+
+    /**
+     * Runs {@code codex --help}.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult help() { return cli.help(); }
 
     // ============================================================
-    // exec — 非交互执行
+    // exec — non-interactive execution
     // ============================================================
 
-    /** 发送 prompt 并阻塞等待结果 */
+    /**
+     * Sends {@code prompt} and blocks until the {@code codex exec} call
+     * returns, propagating every default from the client configuration.
+     *
+     * @param prompt the prompt to feed to the agent.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult exec(String prompt) {
         CodexCli.ExecOptions opts = defaultOptions(prompt);
         return cli.executor().execute(opts.toArgs());
     }
 
-    /** 发送 prompt（指定模型），返回 JSONL 事件 */
+    /**
+     * Sends {@code prompt} using the specified {@code model} and enables
+     * {@code --json} output so the result can be parsed into events.
+     *
+     * @param prompt the prompt to feed to the agent.
+     * @param model  the model identifier to pin for this call.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult exec(String prompt, String model) {
         return cli.exec(new CodexCli.ExecOptions(prompt).model(model).json(true));
     }
 
-    /** 完整参数执行 */
+    /**
+     * Runs {@code codex exec} with the supplied, fully-configured options.
+     *
+     * @param opts execution options; must not be {@code null}.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult exec(CodexCli.ExecOptions opts) {
         return cli.executor().execute(opts.toArgs());
     }
 
-    /** 执行并解析 JSONL 输出为 CodexEvent 列表 */
+    /**
+     * Convenience wrapper that runs {@code exec(prompt)} and decodes the
+     * standard output into a list of {@link CodexEvent} instances.
+     *
+     * @param prompt the prompt to feed to the agent.
+     * @return the parsed JSON-Lines events; an empty list when the output is
+     *         empty or unparseable.
+     */
     public List<CodexEvent> execAndParse(String prompt) {
         CodexCliResult result = exec(prompt);
         return parseJsonlOutput(result.getStdout());
     }
 
-    /** 在指定目录中执行 */
+    /**
+     * Runs {@code codex exec} with the {@code -C} flag pointed at the given
+     * directory.
+     *
+     * @param workingDir the working directory passed via {@code -C}.
+     * @param prompt     the prompt to feed to the agent.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execInDir(String workingDir, String prompt) {
         return cli.exec(new CodexCli.ExecOptions(prompt).workingDir(workingDir));
     }
 
-    /** 临时执行（不持久化 session） */
+    /**
+     * Runs {@code codex exec --ephemeral <prompt>} &mdash; the session is not
+     * persisted to disk after the call completes.
+     *
+     * @param prompt the prompt to feed to the agent.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execEphemeral(String prompt) {
         return cli.exec(new CodexCli.ExecOptions(prompt).ephemeral(true));
     }
 
-    /** 执行并启用 web search */
+    /**
+     * Runs {@code codex exec --search <prompt>} so the agent can call the
+     * web-search tool during execution.
+     *
+     * @param prompt the prompt to feed to the agent.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execWithSearch(String prompt) {
         return cli.exec(new CodexCli.ExecOptions(prompt).search(true));
     }
 
-    /** 执行并输出最后消息到文件 */
+    /**
+     * Runs {@code codex exec -o <outputFile> <prompt>}.
+     *
+     * @param prompt     the prompt to feed to the agent.
+     * @param outputFile destination file for the final message.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execToFile(String prompt, String outputFile) {
         return cli.exec(new CodexCli.ExecOptions(prompt).outputFile(outputFile));
     }
 
-    /** 执行并指定输出 Schema */
+    /**
+     * Runs {@code codex exec --output-schema <schema> <prompt>}.
+     *
+     * @param prompt       the prompt to feed to the agent.
+     * @param outputSchema JSON Schema path describing the expected structured output.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execWithSchema(String prompt, String outputSchema) {
         return cli.exec(new CodexCli.ExecOptions(prompt).outputSchema(outputSchema));
     }
 
-    /** 执行并附带图片 */
+    /**
+     * Runs {@code codex exec --image <imagePath> <prompt>}.
+     *
+     * @param prompt    the prompt to feed to the agent.
+     * @param imagePath path to an image attachment forwarded to the agent.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execWithImage(String prompt, String imagePath) {
         return cli.exec(new CodexCli.ExecOptions(prompt).image(imagePath));
     }
 
-    /** 执行并覆盖配置项 */
+    /**
+     * Runs {@code codex exec} with one or more {@code -c key=value} overrides.
+     *
+     * @param prompt          the prompt to feed to the agent.
+     * @param configOverrides each element becomes a separate {@code -c} flag.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execWithConfigOverrides(String prompt, String... configOverrides) {
         return cli.exec(new CodexCli.ExecOptions(prompt).configOverrides(configOverrides));
     }
 
-    /** 执行并跳过所有审批和沙箱（极度危险） */
+    /**
+     * Runs {@code codex exec --dangerously-bypass-approvals-and-sandbox
+     * <prompt>}. <strong>Use with extreme caution</strong>.
+     *
+     * @param prompt the prompt to feed to the agent.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execDangerously(String prompt) {
         return cli.exec(new CodexCli.ExecOptions(prompt).dangerouslyBypassApprovalsAndSandbox(true));
     }
 
-    /** 执行并跳过 hook 信任检查 */
+    /**
+     * Runs {@code codex exec --dangerously-bypass-hook-trust <prompt>}.
+     *
+     * @param prompt the prompt to feed to the agent.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execBypassHookTrust(String prompt) {
         return cli.exec(new CodexCli.ExecOptions(prompt).dangerouslyBypassHookTrust(true));
     }
 
-    /** 执行并启用指定 feature */
+    /**
+     * Runs {@code codex exec --enable <feature>... <prompt>}.
+     *
+     * @param prompt   the prompt to feed to the agent.
+     * @param features feature flags to enable.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execWithEnable(String prompt, String... features) {
         return cli.exec(new CodexCli.ExecOptions(prompt).enable(features));
     }
 
-    /** 执行并禁用指定 feature */
+    /**
+     * Runs {@code codex exec --disable <feature>... <prompt>}.
+     *
+     * @param prompt   the prompt to feed to the agent.
+     * @param features feature flags to disable.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execWithDisable(String prompt, String... features) {
         return cli.exec(new CodexCli.ExecOptions(prompt).disable(features));
     }
 
     // ============================================================
-    // 交互式会话
+    // Interactive session
     // ============================================================
 
-    /** 启动交互式会话（无初始 prompt） */
+    /**
+     * Starts an interactive session with no initial prompt.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult startSession() {
         return cli.startInteractive();
     }
 
-    /** 启动交互式会话 */
+    /**
+     * Starts an interactive session seeded with the given prompt.
+     *
+     * @param prompt the opening prompt; may be {@code null}.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult startSession(String prompt) {
         return cli.startInteractive(prompt);
     }
 
-    /** 带全局选项的交互式会话 */
+    /**
+     * Starts an interactive session configured with the supplied global
+     * options and seeded with the given prompt.
+     *
+     * @param opts   the global options to apply before the prompt.
+     * @param prompt the opening prompt; may be {@code null}.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult startSession(CodexCli.GlobalOptions opts, String prompt) {
         return cli.startInteractive(opts, prompt);
     }
 
     // ============================================================
-    // exec resume — 恢复非交互会话
+    // exec resume — resuming non-interactive sessions
     // ============================================================
 
-    /** 恢复指定 session 并追加 prompt */
+    /**
+     * Resumes the named session and appends the supplied prompt.
+     *
+     * @param sessionId the session identifier to resume.
+     * @param prompt    the prompt to append.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execResume(String sessionId, String prompt) {
         return cli.execResume(sessionId, prompt);
     }
 
-    /** 恢复最近的非交互 session */
+    /**
+     * Resumes the most recent non-interactive session and appends the
+     * supplied prompt.
+     *
+     * @param prompt the prompt to append.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execResumeLast(String prompt) {
         return cli.execResumeLast(prompt);
     }
 
-    /** 恢复最近的 session（不追加 prompt） */
+    /**
+     * Resumes the most recent session without appending any prompt.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execResumeLast() {
         return cli.execResumeLast();
     }
 
-    /** 恢复并保存最后消息到文件 */
+    /**
+     * Resumes the most recent session, appends the supplied prompt, and
+     * writes the final message to {@code outputFile}.
+     *
+     * @param prompt     the prompt to append.
+     * @param outputFile destination file for the final message.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execResumeLastToFile(String prompt, String outputFile) {
         return cli.execResumeLast(prompt, outputFile);
     }
 
-    /** 恢复指定 session（包含所有历史）并追加 prompt */
+    /**
+     * Resumes the named session together with its entire history and appends
+     * the supplied prompt.
+     *
+     * @param sessionId the session identifier to resume.
+     * @param prompt    the prompt to append.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execResumeAll(String sessionId, String prompt) {
         return cli.execResumeAll(sessionId, prompt);
     }
 
     // ============================================================
-    // review — 代码审查
+    // review — code review
     // ============================================================
 
+    /**
+     * Runs {@code codex review}.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult review() { return cli.review(); }
+
+    /**
+     * Runs {@code codex review --uncommitted}.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult reviewUncommitted() { return cli.reviewUncommitted(); }
+
+    /**
+     * Runs {@code codex review --base <branch>}.
+     *
+     * @param branch the branch used as the review baseline.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult reviewBase(String branch) { return cli.reviewBase(branch); }
+
+    /**
+     * Runs {@code codex review --commit <sha>}.
+     *
+     * @param sha the commit SHA used as the review baseline.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult reviewCommit(String sha) { return cli.reviewCommit(sha); }
 
-    /** 带标题的 code review */
+    /**
+     * Runs {@code codex review --title <title> <prompt>}.
+     *
+     * @param prompt the review prompt.
+     * @param title  the human-readable review title.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult review(String prompt, String title) {
         return cli.review(prompt, title);
     }
 
     // ============================================================
-    // Session 生命周期
+    // Session lifecycle
     // ============================================================
 
-    /** 恢复交互式 session（通过 ID） */
+    /**
+     * Resumes an interactive session by id.
+     *
+     * @param sessionId the session identifier to resume.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult resumeSession(String sessionId) {
         return cli.resume(sessionId);
     }
 
-    /** 恢复交互式 session 并追加 prompt */
+    /**
+     * Resumes an interactive session by id and appends the supplied prompt.
+     *
+     * @param sessionId the session identifier to resume.
+     * @param prompt    the prompt to append.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult resumeSession(String sessionId, String prompt) {
         return cli.resume(sessionId, prompt);
     }
 
-    /** 恢复最近交互式 session */
+    /**
+     * Resumes the most recent interactive session.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult resumeLastSession() {
         return cli.resumeLast();
     }
 
-    /** 恢复最近交互式 session 并追加 prompt */
+    /**
+     * Resumes the most recent interactive session and appends the supplied
+     * prompt.
+     *
+     * @param prompt the prompt to append.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult resumeLastSession(String prompt) {
         return cli.resumeLast(prompt);
     }
 
-    /** 查看所有 session（跨目录） */
+    /**
+     * Lists every session across all directories.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult resumeAllSessions() {
         return cli.resumeAll();
     }
 
-    /** 恢复最近 session（含非交互式） */
+    /**
+     * Resumes the most recent session, including non-interactive ones.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult resumeIncludeNonInteractive() {
         return cli.resumeIncludeNonInteractive();
     }
 
-    /** Fork 会话（保留历史，创建新分支） */
+    /**
+     * Forks the named session.
+     *
+     * @param sessionId the session identifier to fork.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult forkSession(String sessionId) {
         return cli.fork(sessionId);
     }
 
-    /** Fork 会话并追加 prompt */
+    /**
+     * Forks the named session and appends the supplied prompt.
+     *
+     * @param sessionId the session identifier to fork.
+     * @param prompt    the prompt to append.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult forkSession(String sessionId, String prompt) {
         return cli.fork(sessionId, prompt);
     }
 
-    /** Fork 最近会话 */
+    /**
+     * Forks the most recent session.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult forkLastSession() {
         return cli.forkLast();
     }
 
-    /** Fork 最近会话并追加 prompt */
+    /**
+     * Forks the most recent session and appends the supplied prompt.
+     *
+     * @param prompt the prompt to append.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult forkLastSession(String prompt) {
         return cli.forkLast(prompt);
     }
 
-    /** Fork 所有历史会话 */
+    /**
+     * Forks the named session, scanning the entire session index.
+     *
+     * @param sessionId the session identifier to fork.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult forkAllSessions(String sessionId) {
         return cli.forkAll(sessionId);
     }
 
-    /** 归档会话 */
+    /**
+     * Archives the named session.
+     *
+     * @param sessionId the session identifier to archive.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult archiveSession(String sessionId) {
         return cli.archive(sessionId);
     }
 
-    /** 取消归档 */
+    /**
+     * Unarchives the named session.
+     *
+     * @param sessionId the session identifier to unarchive.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult unarchiveSession(String sessionId) {
         return cli.unarchive(sessionId);
     }
@@ -267,7 +562,12 @@ public class CodexClient implements AutoCloseable {
     // apply
     // ============================================================
 
-    /** 应用 task diff 到当前工作树 */
+    /**
+     * Applies the diff produced by the given task to the working tree.
+     *
+     * @param taskId the task identifier.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult apply(String taskId) {
         return cli.apply(taskId);
     }
@@ -276,65 +576,213 @@ public class CodexClient implements AutoCloseable {
     // auth
     // ============================================================
 
+    /**
+     * Runs {@code codex login}.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult login() { return cli.login(); }
+
+    /**
+     * Runs {@code codex logout}.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult logout() { return cli.logout(); }
 
     // ============================================================
     // mcp
     // ============================================================
 
+    /**
+     * Runs {@code codex mcp list}.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult mcpList() { return cli.mcpList(); }
+
+    /**
+     * Runs {@code codex mcp get <name>}.
+     *
+     * @param name the MCP server name.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult mcpGet(String name) { return cli.mcpGet(name); }
+
+    /**
+     * Runs {@code codex mcp add <name> <command> [args...]}.
+     *
+     * @param name    the MCP server name.
+     * @param command the launcher command.
+     * @param args    optional extra arguments.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult mcpAdd(String name, String command, String... args) { return cli.mcpAdd(name, command, args); }
+
+    /**
+     * Runs {@code codex mcp remove <name>}.
+     *
+     * @param name the MCP server name.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult mcpRemove(String name) { return cli.mcpRemove(name); }
+
+    /**
+     * Runs {@code codex mcp login <name>}.
+     *
+     * @param name the MCP server name.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult mcpLogin(String name) { return cli.mcpLogin(name); }
+
+    /**
+     * Runs {@code codex mcp logout <name>}.
+     *
+     * @param name the MCP server name.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult mcpLogout(String name) { return cli.mcpLogout(name); }
 
     // ============================================================
     // doctor
     // ============================================================
 
+    /**
+     * Runs {@code codex doctor}.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult doctor() { return cli.doctor(); }
+
+    /**
+     * Runs {@code codex doctor --json}.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult doctorJson() { return cli.doctorJson(); }
+
+    /**
+     * Runs {@code codex doctor --summary}.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult doctorSummary() { return cli.doctorSummary(); }
 
     // ============================================================
-    // 其他命令
+    // Other commands
     // ============================================================
 
+    /**
+     * Runs {@code codex update}.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult update() { return cli.update(); }
+
+    /**
+     * Runs {@code codex completion <shell>}.
+     *
+     * @param shell the target shell name.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult completion(String shell) { return cli.completion(shell); }
+
+    /**
+     * Runs {@code codex features}.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult features() { return cli.features(); }
+
+    /**
+     * Runs {@code codex mcp-server}.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult mcpServer() { return cli.mcpServer(); }
 
-    /** {@code codex app} */
+    /**
+     * Runs {@code codex app}.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult app() { return cli.app(); }
 
-    /** {@code codex sandbox <command...>} */
+    /**
+     * Runs {@code codex sandbox <command...>}.
+     *
+     * @param command the shell command to execute inside the sandbox.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult sandbox(String... command) { return cli.sandbox(command); }
 
-    /** {@code codex sandbox --permissions-profile <profile> <command...>} */
+    /**
+     * Runs {@code codex sandbox --permissions-profile <profile> <command...>}.
+     *
+     * @param profile the permissions profile name.
+     * @param command the shell command to execute inside the sandbox.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult sandbox(String profile, String... command) { return cli.sandbox(profile, command); }
 
-    /** {@code codex debug [args...]} */
+    /**
+     * Runs {@code codex debug <args...>}.
+     *
+     * @param args arguments forwarded to the debug sub-command.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult debug(String... args) { return cli.debug(args); }
 
-    /** {@code codex cloud [args...]} */
+    /**
+     * Runs {@code codex cloud <args...>}.
+     *
+     * @param args arguments forwarded to the cloud sub-command.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult cloud(String... args) { return cli.cloud(args); }
 
-    /** {@code codex app-server [args...]} */
+    /**
+     * Runs {@code codex app-server <args...>}.
+     *
+     * @param args arguments forwarded to the app-server sub-command.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult appServer(String... args) { return cli.appServer(args); }
 
-    /** {@code codex remote-control [args...]} */
+    /**
+     * Runs {@code codex remote-control <args...>}.
+     *
+     * @param args arguments forwarded to the remote-control sub-command.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult remoteControl(String... args) { return cli.remoteControl(args); }
 
-    /** {@code codex exec-server [args...]} */
+    /**
+     * Runs {@code codex exec-server <args...>}.
+     *
+     * @param args arguments forwarded to the exec-server sub-command.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execServer(String... args) { return cli.execServer(args); }
 
-    /** {@code codex plugin [args...]} */
+    /**
+     * Runs {@code codex plugin <args...>}.
+     *
+     * @param args arguments forwarded to the plugin sub-command.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult plugin(String... args) { return cli.plugin(args); }
 
-    /** 解析 doctor --json 输出 */
+    /**
+     * Parses the JSON document produced by {@code codex doctor --json}.
+     *
+     * <p>This helper invokes {@link CodexCli#doctorJson()} and decodes the
+     * standard output as a {@link CodexDoctorReport}. If the call failed or
+     * the output is empty, {@code null} is returned.</p>
+     *
+     * @return the decoded report, or {@code null} if the CLI failed or the
+     *         payload could not be parsed.
+     */
     public CodexDoctorReport parseDoctorReport() {
         CodexCliResult result = cli.doctorJson();
         if (!result.isSuccess() || result.getStdout().isEmpty()) return null;
@@ -346,7 +794,14 @@ public class CodexClient implements AutoCloseable {
         }
     }
 
-    /** 解析 session list JSON 输出（从 resume --all 等命令） */
+    /**
+     * Parses the JSON array emitted by session-listing commands such as
+     * {@code codex resume --all}.
+     *
+     * @param result the CLI result of a session-listing command.
+     * @return the decoded list, or an empty list if the call failed or the
+     *         payload could not be parsed.
+     */
     public List<CodexSession> parseSessionList(CodexCliResult result) {
         if (!result.isSuccess() || result.getStdout().isEmpty()) return Collections.emptyList();
         try {
@@ -357,22 +812,48 @@ public class CodexClient implements AutoCloseable {
         }
     }
 
-    /** 执行自定义 CLI 参数 */
+    /**
+     * Executes the underlying CLI with arbitrary arguments.
+     *
+     * <p>Useful as an escape hatch for callers that need to invoke a CLI
+     * flag combination not yet wrapped by a dedicated method.</p>
+     *
+     * @param args the raw argument list.
+     * @return the raw CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execute(String... args) {
         return cli.executor().execute(args);
     }
 
     // ============================================================
-    // CLI 实例
+    // CLI instance
     // ============================================================
 
+    /**
+     * Returns the underlying {@link CodexCli} for advanced callers.
+     *
+     * @return the CLI facade backing this client; never {@code null}.
+     */
     public CodexCli cli() { return cli; }
+
+    /**
+     * Returns the runtime configuration used by this client.
+     *
+     * @return the configuration; never {@code null}.
+     */
     public CodexClientConfig getConfig() { return config; }
 
     // ============================================================
-    // 工具方法
+    // Utility helpers
     // ============================================================
 
+    /**
+     * Builds an {@link CodexCli.ExecOptions} seeded with every default from
+     * the client configuration that is relevant to {@code codex exec}.
+     *
+     * @param prompt the prompt to embed in the resulting options.
+     * @return a fresh options instance; never {@code null}.
+     */
     private CodexCli.ExecOptions defaultOptions(String prompt) {
         CodexCli.ExecOptions opts = new CodexCli.ExecOptions(prompt).json(true);
         if (config.getDefaultModel() != null) opts.model(config.getDefaultModel());
@@ -398,6 +879,16 @@ public class CodexClient implements AutoCloseable {
         return opts;
     }
 
+    /**
+     * Decodes a JSON-Lines blob into a list of {@link CodexEvent}s.
+     *
+     * <p>Blank lines and lines that fail to parse are silently skipped; the
+     * returned list contains only successfully-decoded events in their
+     * original order.</p>
+     *
+     * @param stdout the trimmed CLI standard output.
+     * @return the decoded events; never {@code null}.
+     */
     private List<CodexEvent> parseJsonlOutput(String stdout) {
         List<CodexEvent> events = new ArrayList<>();
         if (stdout == null || stdout.isEmpty()) return events;
@@ -414,6 +905,11 @@ public class CodexClient implements AutoCloseable {
         return events;
     }
 
+    /**
+     * Closes this client. The default implementation is a no-op because the
+     * underlying {@link CodexCliExecutor} does not hold any long-lived
+     * resources.
+     */
     @Override
     public void close() {
     }
