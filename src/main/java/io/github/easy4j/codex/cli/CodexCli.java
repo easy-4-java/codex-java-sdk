@@ -1,3 +1,18 @@
+/*
+ * Copyright (c) 2018-present, easy-4-java (https://github.com/easy-4-java).
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.github.easy4j.codex.cli;
 
 import org.slf4j.Logger;
@@ -8,19 +23,32 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 本地 {@code codex} CLI 命令封装 — 覆盖所有官方 CLI 命令。
+ * Type-safe facade over every command exposed by the local {@code codex} CLI.
  *
- * <h3>Session 管理（核心特性）</h3>
+ * <p>This class is the lowest-level Java abstraction in the SDK: each public
+ * method corresponds to exactly one CLI invocation. Higher-level components
+ * such as {@link io.github.easy4j.codex.CodexClient} compose these primitives
+ * to deliver ergonomic Java APIs.</p>
+ *
+ * <h3>Session management (core feature)</h3>
  * <ul>
- *   <li>{@link #resume(String) resume(sessionId)} — 恢复交互式会话</li>
- *   <li>{@link #resumeLast() resumeLast()} — 恢复最近会话</li>
- *   <li>{@link #fork(String) fork(sessionId)} — Fork 会话</li>
- *   <li>{@link #archive(String) archive(sessionId)} — 归档会话</li>
- *   <li>{@link #unarchive(String) unarchive(sessionId)} — 取消归档</li>
- *   <li>{@link #execResume(String) execResume(sessionId)} — 恢复非交互式会话</li>
+ *   <li>{@link #resume(String)} &mdash; resume an interactive session.</li>
+ *   <li>{@link #resumeLast()} &mdash; resume the most recent session.</li>
+ *   <li>{@link #fork(String)} &mdash; fork an existing session into a new branch.</li>
+ *   <li>{@link #archive(String)} / {@link #unarchive(String)} &mdash; move sessions in and out of the archive.</li>
+ *   <li>{@link #execResume(String)} &mdash; resume a non-interactive (one-shot) session.</li>
  * </ul>
  *
+ * <p>The two inner option builders {@link ExecOptions} and
+ * {@link GlobalOptions} collect every flag supported by the CLI and emit them
+ * via {@code toArgs()}. They are the only classes in the SDK that know the
+ * exact CLI flag spelling, isolating that knowledge from the rest of the code
+ * base.</p>
+ *
+ * @author easy-4-java contributors
+ * @since 3.0.0
  * @see <a href="https://github.com/openai/codex">Codex CLI</a>
+ * @see CodexCliExecutor
  */
 public class CodexCli {
 
@@ -28,10 +56,21 @@ public class CodexCli {
 
     private final CodexCliExecutor executor;
 
+    /**
+     * Creates a new {@code CodexCli} that delegates process execution to the
+     * provided executor.
+     *
+     * @param executor the subprocess executor; must not be {@code null}.
+     */
     public CodexCli(CodexCliExecutor executor) {
         this.executor = executor;
     }
 
+    /**
+     * Returns the underlying executor for callers that need direct access.
+     *
+     * @return the executor backing this CLI instance; never {@code null}.
+     */
     public CodexCliExecutor executor() {
         return executor;
     }
@@ -40,12 +79,20 @@ public class CodexCli {
     // 全局
     // ============================================================
 
-    /** {@code codex --version} */
+    /**
+     * Runs {@code codex --version}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult version() {
         return executor.execute("--version");
     }
 
-    /** {@code codex --help} */
+    /**
+     * Runs {@code codex --help}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult help() {
         return executor.execute("--help");
     }
@@ -54,17 +101,36 @@ public class CodexCli {
     // 交互式会话（全局选项 + 可选 prompt）
     // ============================================================
 
-    /** {@code codex [prompt]} — 启动交互式会话 */
+    /**
+     * Runs {@code codex [prompt]} &mdash; launches an interactive session with
+     * the supplied initial prompt.
+     *
+     * @param prompt the opening prompt to feed to the TUI; may be {@code null}
+     *               when the user should be prompted at startup.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult startInteractive(String prompt) {
         return executor.execute(prompt);
     }
 
-    /** {@code codex} — 启动交互式会话（无初始 prompt） */
+    /**
+     * Runs {@code codex} with no arguments &mdash; launches an interactive
+     * session with an empty prompt.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult startInteractive() {
         return executor.execute();
     }
 
-    /** {@code codex [global options] [prompt]} — 带全局选项的交互式会话 */
+    /**
+     * Runs {@code codex [global options] [prompt]} &mdash; launches an
+     * interactive session pre-configured with the supplied global options.
+     *
+     * @param opts   global options applied before the optional prompt; must not be {@code null}.
+     * @param prompt opening prompt; may be {@code null}.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult startInteractive(GlobalOptions opts, String prompt) {
         List<String> args = new ArrayList<>();
         Collections.addAll(args, opts.toArgs());
@@ -76,17 +142,36 @@ public class CodexCli {
     // exec — 非交互执行
     // ============================================================
 
-    /** {@code codex exec <prompt>} */
+    /**
+     * Runs {@code codex exec <prompt>}.
+     *
+     * @param prompt the prompt to feed to the agent.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult exec(String prompt) {
         return executor.execute("exec", prompt);
     }
 
-    /** {@code codex exec --model <model> <prompt>} */
+    /**
+     * Runs {@code codex exec --model <model> <prompt>}.
+     *
+     * @param prompt the prompt to feed to the agent.
+     * @param model  the model identifier to pin for this run.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult exec(String prompt, String model) {
         return executor.execute("exec", "--model", model, prompt);
     }
 
-    /** {@code codex exec --model <model> --sandbox <mode> --json <prompt>} */
+    /**
+     * Runs {@code codex exec --model <model> --sandbox <mode> [--json] <prompt>}.
+     *
+     * @param prompt  the prompt to feed to the agent.
+     * @param model   model identifier, or {@code null} to omit {@code --model}.
+     * @param sandbox sandbox mode, or {@code null} to omit {@code --sandbox}.
+     * @param json    whether to enable {@code --json} output.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult exec(String prompt, String model, String sandbox, boolean json) {
         List<String> args = new ArrayList<>();
         args.add("exec");
@@ -97,12 +182,24 @@ public class CodexCli {
         return executor.execute(args.toArray(new String[0]));
     }
 
-    /** {@code codex exec --model <model> --sandbox <mode> --ephemeral --json --output-last-message <file> <prompt>} */
+    /**
+     * Runs {@code codex exec} using every flag carried by the supplied
+     * {@link ExecOptions}.
+     *
+     * @param opts assembled execution options; must not be {@code null}.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult exec(ExecOptions opts) {
         return executor.execute(opts.toArgs());
     }
 
-    /** {@code codex exec -C <dir> --add-dir <dir> --skip-git-repo-check <prompt>} */
+    /**
+     * Runs {@code codex exec -C <dir> <prompt>}.
+     *
+     * @param workingDir the working directory passed via {@code -C}.
+     * @param prompt     the prompt to feed to the agent.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execInDir(String workingDir, String prompt) {
         return executor.execute("exec", "-C", workingDir, prompt);
     }
@@ -111,27 +208,54 @@ public class CodexCli {
     // exec resume — 恢复非交互会话
     // ============================================================
 
-    /** {@code codex exec resume <sessionId> <prompt>} */
+    /**
+     * Runs {@code codex exec resume <sessionId> <prompt>}.
+     *
+     * @param sessionId the session to resume.
+     * @param prompt    the prompt to append to the resumed session.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execResume(String sessionId, String prompt) {
         return executor.execute("exec", "resume", sessionId, prompt);
     }
 
-    /** {@code codex exec resume --last <prompt>} */
+    /**
+     * Runs {@code codex exec resume --last <prompt>}.
+     *
+     * @param prompt the prompt to append to the last non-interactive session.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execResumeLast(String prompt) {
         return executor.execute("exec", "resume", "--last", prompt);
     }
 
-    /** {@code codex exec resume --last} */
+    /**
+     * Runs {@code codex exec resume --last} with no additional prompt.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execResumeLast() {
         return executor.execute("exec", "resume", "--last");
     }
 
-    /** {@code codex exec resume --last --json --output-last-message <file> <prompt>} */
+    /**
+     * Runs {@code codex exec resume --last --json -o <file> <prompt>}.
+     *
+     * @param prompt     the prompt to append to the last session.
+     * @param outputFile path where the final message is written.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execResumeLast(String prompt, String outputFile) {
         return executor.execute("exec", "resume", "--last", "--json", "-o", outputFile, prompt);
     }
 
-    /** {@code codex exec resume --all <sessionId> <prompt>} */
+    /**
+     * Runs {@code codex exec resume --all <sessionId> <prompt>}.
+     *
+     * @param sessionId the session to resume, scanning all directories.
+     * @param prompt    the prompt to append.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execResumeAll(String sessionId, String prompt) {
         return executor.execute("exec", "resume", "--all", sessionId, prompt);
     }
@@ -140,27 +264,51 @@ public class CodexCli {
     // review — 代码审查
     // ============================================================
 
-    /** {@code codex review} */
+    /**
+     * Runs {@code codex review}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult review() {
         return executor.execute("review");
     }
 
-    /** {@code codex review --uncommitted} */
+    /**
+     * Runs {@code codex review --uncommitted}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult reviewUncommitted() {
         return executor.execute("review", "--uncommitted");
     }
 
-    /** {@code codex review --base <branch>} */
+    /**
+     * Runs {@code codex review --base <branch>}.
+     *
+     * @param baseBranch the branch used as the review baseline.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult reviewBase(String baseBranch) {
         return executor.execute("review", "--base", baseBranch);
     }
 
-    /** {@code codex review --commit <sha>} */
+    /**
+     * Runs {@code codex review --commit <sha>}.
+     *
+     * @param sha the commit SHA used as the review baseline.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult reviewCommit(String sha) {
         return executor.execute("review", "--commit", sha);
     }
 
-    /** {@code codex review --title <title> <prompt>} */
+    /**
+     * Runs {@code codex review --title <title> <prompt>}.
+     *
+     * @param prompt the review prompt.
+     * @param title  the human-readable review title.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult review(String prompt, String title) {
         return executor.execute("review", "--title", title, prompt);
     }
@@ -169,7 +317,13 @@ public class CodexCli {
     // session — 会话生命周期
     // ============================================================
 
-    /** {@code codex resume [sessionId] [prompt]} — 交互式恢复 */
+    /**
+     * Runs {@code codex resume [sessionId] [prompt]}.
+     *
+     * @param sessionId the session to resume.
+     * @param prompt    the prompt to append; may be {@code null} to just resume.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult resume(String sessionId, String prompt) {
         if (prompt != null) {
             return executor.execute("resume", sessionId, prompt);
@@ -177,31 +331,61 @@ public class CodexCli {
         return executor.execute("resume", sessionId);
     }
 
+    /**
+     * Runs {@code codex resume [sessionId]} with no additional prompt.
+     *
+     * @param sessionId the session to resume.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult resume(String sessionId) {
         return resume(sessionId, null);
     }
 
-    /** {@code codex resume --last} — 恢复最近会话 */
+    /**
+     * Runs {@code codex resume --last}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult resumeLast() {
         return executor.execute("resume", "--last");
     }
 
-    /** {@code codex resume --last [prompt]} */
+    /**
+     * Runs {@code codex resume --last [prompt]}.
+     *
+     * @param prompt the prompt to append; may be {@code null}.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult resumeLast(String prompt) {
         return executor.execute("resume", "--last", prompt);
     }
 
-    /** {@code codex resume --all} — 查看所有会话（包括其他目录的） */
+    /**
+     * Runs {@code codex resume --all}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult resumeAll() {
         return executor.execute("resume", "--all");
     }
 
-    /** {@code codex resume --include-non-interactive} */
+    /**
+     * Runs {@code codex resume --last --include-non-interactive}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult resumeIncludeNonInteractive() {
         return executor.execute("resume", "--last", "--include-non-interactive");
     }
 
-    /** {@code codex resume --model <model> <sessionId> [prompt]} */
+    /**
+     * Runs {@code codex resume --model <model> <sessionId> [prompt]}.
+     *
+     * @param sessionId the session to resume.
+     * @param prompt    the prompt to append; may be {@code null}.
+     * @param model     the model identifier to pin.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult resume(String sessionId, String prompt, String model) {
         return executor.execute("resume", "--model", model, sessionId, prompt);
     }
@@ -210,7 +394,13 @@ public class CodexCli {
     // fork — 分支会话
     // ============================================================
 
-    /** {@code codex fork [sessionId] [prompt]} */
+    /**
+     * Runs {@code codex fork [sessionId] [prompt]}.
+     *
+     * @param sessionId the session to fork.
+     * @param prompt    the prompt to append to the forked session; may be {@code null}.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult fork(String sessionId, String prompt) {
         if (prompt != null) {
             return executor.execute("fork", sessionId, prompt);
@@ -218,21 +408,41 @@ public class CodexCli {
         return executor.execute("fork", sessionId);
     }
 
+    /**
+     * Runs {@code codex fork <sessionId>} with no additional prompt.
+     *
+     * @param sessionId the session to fork.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult fork(String sessionId) {
         return fork(sessionId, null);
     }
 
-    /** {@code codex fork --last} */
+    /**
+     * Runs {@code codex fork --last}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult forkLast() {
         return executor.execute("fork", "--last");
     }
 
-    /** {@code codex fork --last [prompt]} */
+    /**
+     * Runs {@code codex fork --last [prompt]}.
+     *
+     * @param prompt the prompt to append; may be {@code null}.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult forkLast(String prompt) {
         return executor.execute("fork", "--last", prompt);
     }
 
-    /** {@code codex fork --all <sessionId>} */
+    /**
+     * Runs {@code codex fork --all <sessionId>}.
+     *
+     * @param sessionId the session to fork from the full session index.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult forkAll(String sessionId) {
         return executor.execute("fork", "--all", sessionId);
     }
@@ -241,12 +451,22 @@ public class CodexCli {
     // archive / unarchive
     // ============================================================
 
-    /** {@code codex archive <sessionId>} */
+    /**
+     * Runs {@code codex archive <sessionId>}.
+     *
+     * @param sessionId the session to archive.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult archive(String sessionId) {
         return executor.execute("archive", sessionId);
     }
 
-    /** {@code codex unarchive <sessionId>} */
+    /**
+     * Runs {@code codex unarchive <sessionId>}.
+     *
+     * @param sessionId the session to unarchive.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult unarchive(String sessionId) {
         return executor.execute("unarchive", sessionId);
     }
@@ -255,7 +475,12 @@ public class CodexCli {
     // apply
     // ============================================================
 
-    /** {@code codex apply <taskId>} */
+    /**
+     * Runs {@code codex apply <taskId>}.
+     *
+     * @param taskId the task identifier whose diff should be applied.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult apply(String taskId) {
         return executor.execute("apply", taskId);
     }
@@ -264,12 +489,20 @@ public class CodexCli {
     // auth
     // ============================================================
 
-    /** {@code codex login} */
+    /**
+     * Runs {@code codex login}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult login() {
         return executor.execute("login");
     }
 
-    /** {@code codex logout} */
+    /**
+     * Runs {@code codex logout}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult logout() {
         return executor.execute("logout");
     }
@@ -278,17 +511,33 @@ public class CodexCli {
     // mcp
     // ============================================================
 
-    /** {@code codex mcp list} */
+    /**
+     * Runs {@code codex mcp list}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult mcpList() {
         return executor.execute("mcp", "list");
     }
 
-    /** {@code codex mcp get <name>} */
+    /**
+     * Runs {@code codex mcp get <name>}.
+     *
+     * @param name the MCP server name.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult mcpGet(String name) {
         return executor.execute("mcp", "get", name);
     }
 
-    /** {@code codex mcp add <name> <command> [args...]} */
+    /**
+     * Runs {@code codex mcp add <name> <command> [args...]}.
+     *
+     * @param name    the MCP server name.
+     * @param command the launcher command for the MCP server.
+     * @param args    optional extra arguments forwarded to the MCP server.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult mcpAdd(String name, String command, String... args) {
         List<String> allArgs = new ArrayList<>();
         allArgs.add("mcp"); allArgs.add("add"); allArgs.add(name); allArgs.add(command);
@@ -296,17 +545,32 @@ public class CodexCli {
         return executor.execute(allArgs.toArray(new String[0]));
     }
 
-    /** {@code codex mcp remove <name>} */
+    /**
+     * Runs {@code codex mcp remove <name>}.
+     *
+     * @param name the MCP server name to remove.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult mcpRemove(String name) {
         return executor.execute("mcp", "remove", name);
     }
 
-    /** {@code codex mcp login <name>} */
+    /**
+     * Runs {@code codex mcp login <name>}.
+     *
+     * @param name the MCP server to authenticate against.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult mcpLogin(String name) {
         return executor.execute("mcp", "login", name);
     }
 
-    /** {@code codex mcp logout <name>} */
+    /**
+     * Runs {@code codex mcp logout <name>}.
+     *
+     * @param name the MCP server to log out of.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult mcpLogout(String name) {
         return executor.execute("mcp", "logout", name);
     }
@@ -315,7 +579,12 @@ public class CodexCli {
     // plugin
     // ============================================================
 
-    /** {@code codex plugin <subcommand...>} */
+    /**
+     * Runs {@code codex plugin <args...>}.
+     *
+     * @param args subcommand and arguments forwarded to the plugin subsystem.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult plugin(String... args) {
         String[] all = new String[args.length + 1];
         all[0] = "plugin";
@@ -327,7 +596,11 @@ public class CodexCli {
     // mcp-server
     // ============================================================
 
-    /** {@code codex mcp-server} */
+    /**
+     * Runs {@code codex mcp-server}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult mcpServer() {
         return executor.execute("mcp-server");
     }
@@ -336,6 +609,12 @@ public class CodexCli {
     // app-server / remote-control
     // ============================================================
 
+    /**
+     * Runs {@code codex app-server <args...>}.
+     *
+     * @param args arguments forwarded to the app-server sub-command.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult appServer(String... args) {
         String[] all = new String[args.length + 1];
         all[0] = "app-server";
@@ -343,6 +622,12 @@ public class CodexCli {
         return executor.execute(all);
     }
 
+    /**
+     * Runs {@code codex remote-control <args...>}.
+     *
+     * @param args arguments forwarded to the remote-control sub-command.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult remoteControl(String... args) {
         String[] all = new String[args.length + 1];
         all[0] = "remote-control";
@@ -354,32 +639,57 @@ public class CodexCli {
     // app / update / doctor
     // ============================================================
 
-    /** {@code codex app} */
+    /**
+     * Runs {@code codex app}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult app() {
         return executor.execute("app");
     }
 
-    /** {@code codex completion <shell>} */
+    /**
+     * Runs {@code codex completion <shell>}.
+     *
+     * @param shell the target shell name (e.g. {@code bash}, {@code zsh}).
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult completion(String shell) {
         return executor.execute("completion", shell);
     }
 
-    /** {@code codex update} */
+    /**
+     * Runs {@code codex update}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult update() {
         return executor.execute("update");
     }
 
-    /** {@code codex doctor} */
+    /**
+     * Runs {@code codex doctor}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult doctor() {
         return executor.execute("doctor");
     }
 
-    /** {@code codex doctor --json} */
+    /**
+     * Runs {@code codex doctor --json}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult doctorJson() {
         return executor.execute("doctor", "--json");
     }
 
-    /** {@code codex doctor --summary} */
+    /**
+     * Runs {@code codex doctor --summary}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult doctorSummary() {
         return executor.execute("doctor", "--summary");
     }
@@ -388,7 +698,12 @@ public class CodexCli {
     // sandbox
     // ============================================================
 
-    /** {@code codex sandbox <command...>} */
+    /**
+     * Runs {@code codex sandbox <command...>}.
+     *
+     * @param command the shell command to execute inside the sandbox.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult sandbox(String... command) {
         String[] all = new String[command.length + 1];
         all[0] = "sandbox";
@@ -396,7 +711,13 @@ public class CodexCli {
         return executor.execute(all);
     }
 
-    /** {@code codex sandbox --permissions-profile <name> <command...>} */
+    /**
+     * Runs {@code codex sandbox --permissions-profile <name> <command...>}.
+     *
+     * @param profile the named permissions profile to load.
+     * @param command the shell command to execute inside the sandbox.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult sandbox(String profile, String... command) {
         List<String> all = new ArrayList<>();
         all.add("sandbox");
@@ -410,6 +731,12 @@ public class CodexCli {
     // debug / cloud / features
     // ============================================================
 
+    /**
+     * Runs {@code codex debug <args...>}.
+     *
+     * @param args arguments forwarded to the debug sub-command.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult debug(String... args) {
         String[] all = new String[args.length + 1];
         all[0] = "debug";
@@ -417,6 +744,12 @@ public class CodexCli {
         return executor.execute(all);
     }
 
+    /**
+     * Runs {@code codex cloud <args...>}.
+     *
+     * @param args arguments forwarded to the cloud sub-command.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult cloud(String... args) {
         String[] all = new String[args.length + 1];
         all[0] = "cloud";
@@ -424,6 +757,11 @@ public class CodexCli {
         return executor.execute(all);
     }
 
+    /**
+     * Runs {@code codex features}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult features() {
         return executor.execute("features");
     }
@@ -432,6 +770,12 @@ public class CodexCli {
     // exec-server
     // ============================================================
 
+    /**
+     * Runs {@code codex exec-server <args...>}.
+     *
+     * @param args arguments forwarded to the exec-server sub-command.
+     * @return the CLI invocation result; never {@code null}.
+     */
     public CodexCliResult execServer(String... args) {
         String[] all = new String[args.length + 1];
         all[0] = "exec-server";
@@ -444,7 +788,16 @@ public class CodexCli {
     // ============================================================
 
     /**
-     * {@code codex exec} 的完整选项组装。
+     * Fluent builder that materialises every flag accepted by
+     * {@code codex exec}.
+     *
+     * <p>{@link #toArgs()} converts the configured state into the exact
+     * {@code String[]} that {@link CodexCliExecutor} expects. Unknown future
+     * flags can be supplied through {@link #configOverrides(String...)} without
+     * requiring changes to this class.</p>
+     *
+     * @author easy-4-java contributors
+     * @since 3.0.0
      */
     public static class ExecOptions {
         private String prompt;
@@ -470,30 +823,61 @@ public class CodexCli {
         private String[] enable;
         private String[] disable;
 
+        /**
+         * Creates a new instance bound to the given prompt.
+         *
+         * @param prompt the prompt to feed to the agent.
+         */
         public ExecOptions(String prompt) { this.prompt = prompt; }
 
+        /** Sets the {@code --model} flag. */
         public ExecOptions model(String v) { this.model = v; return this; }
+        /** Sets the {@code --sandbox} flag. */
         public ExecOptions sandbox(String v) { this.sandbox = v; return this; }
+        /** Sets the {@code --ask-for-approval} flag. */
         public ExecOptions approvalPolicy(String v) { this.approvalPolicy = v; return this; }
+        /** Sets the {@code --profile} flag. */
         public ExecOptions profile(String v) { this.profile = v; return this; }
+        /** Sets the {@code -C} flag. */
         public ExecOptions workingDir(String v) { this.workingDir = v; return this; }
+        /** Sets the {@code --add-dir} flag. */
         public ExecOptions addDir(String v) { this.addDir = v; return this; }
+        /** Sets the {@code -o} flag. */
         public ExecOptions outputFile(String v) { this.outputFile = v; return this; }
+        /** Sets the {@code --output-schema} flag. */
         public ExecOptions outputSchema(String v) { this.outputSchema = v; return this; }
+        /** Sets the {@code --json} flag (default {@code true}). */
         public ExecOptions json(boolean v) { this.json = v; return this; }
+        /** Sets the {@code --ephemeral} flag. */
         public ExecOptions ephemeral(boolean v) { this.ephemeral = v; return this; }
+        /** Sets the {@code --skip-git-repo-check} flag. */
         public ExecOptions skipGitRepoCheck(boolean v) { this.skipGitRepoCheck = v; return this; }
+        /** Sets the {@code --oss} flag. */
         public ExecOptions oss(boolean v) { this.oss = v; return this; }
+        /** Sets the {@code --local-provider} flag. */
         public ExecOptions localProvider(String v) { this.localProvider = v; return this; }
+        /** Sets the {@code --search} flag. */
         public ExecOptions search(boolean v) { this.search = v; return this; }
+        /** Sets the {@code --image} flag. */
         public ExecOptions image(String v) { this.image = v; return this; }
+        /** Sets one or more {@code -c key=value} overrides. */
         public ExecOptions configOverrides(String... v) { this.configOverrides = v; return this; }
+        /** Sets the {@code --dangerously-bypass-approvals-and-sandbox} flag. */
         public ExecOptions dangerouslyBypassApprovalsAndSandbox(boolean v) { this.dangerouslyBypassApprovalsAndSandbox = v; return this; }
+        /** Sets the {@code --dangerously-bypass-hook-trust} flag. */
         public ExecOptions dangerouslyBypassHookTrust(boolean v) { this.dangerouslyBypassHookTrust = v; return this; }
+        /** Sets the {@code --strict-config} flag. */
         public ExecOptions strictConfig(boolean v) { this.strictConfig = v; return this; }
+        /** Sets one or more {@code --enable} flags. */
         public ExecOptions enable(String... v) { this.enable = v; return this; }
+        /** Sets one or more {@code --disable} flags. */
         public ExecOptions disable(String... v) { this.disable = v; return this; }
 
+        /**
+         * Materialises the configured options into a positional argument list.
+         *
+         * @return the CLI argument list, beginning with {@code "exec"}.
+         */
         public String[] toArgs() {
             List<String> args = new ArrayList<>();
             args.add("exec");
@@ -534,8 +918,15 @@ public class CodexCli {
     // ============================================================
 
     /**
-     * {@code codex [GLOBAL_OPTIONS] [PROMPT]} 的全局选项组装。
-     * 这些选项位于子命令之前，适用于交互式会话或任意子命令。
+     * Fluent builder that materialises the global flags accepted before the
+     * sub-command in {@code codex [GLOBAL_OPTIONS] [SUBCOMMAND]}.
+     *
+     * <p>Unlike {@link ExecOptions}, this builder does NOT prepend
+     * {@code "exec"} because the global flags apply to whichever sub-command
+     * follows them.</p>
+     *
+     * @author easy-4-java contributors
+     * @since 3.0.0
      */
     public static class GlobalOptions {
         private String model;
@@ -556,24 +947,48 @@ public class CodexCli {
         private String[] disable;
         private boolean noAltScreen;
 
+        /** Sets the {@code --model} flag. */
         public GlobalOptions model(String v) { this.model = v; return this; }
+        /** Sets the {@code --sandbox} flag. */
         public GlobalOptions sandbox(String v) { this.sandbox = v; return this; }
+        /** Sets the {@code --ask-for-approval} flag. */
         public GlobalOptions approvalPolicy(String v) { this.approvalPolicy = v; return this; }
+        /** Sets the {@code --profile} flag. */
         public GlobalOptions profile(String v) { this.profile = v; return this; }
+        /** Sets the {@code -C} flag. */
         public GlobalOptions workingDir(String v) { this.workingDir = v; return this; }
+        /** Sets the {@code --add-dir} flag. */
         public GlobalOptions addDir(String v) { this.addDir = v; return this; }
+        /** Sets the {@code --oss} flag. */
         public GlobalOptions oss(boolean v) { this.oss = v; return this; }
+        /** Sets the {@code --local-provider} flag. */
         public GlobalOptions localProvider(String v) { this.localProvider = v; return this; }
+        /** Sets the {@code --search} flag. */
         public GlobalOptions search(boolean v) { this.search = v; return this; }
+        /** Sets one or more {@code --image} flags. */
         public GlobalOptions image(String... v) { this.image = v; return this; }
+        /** Sets one or more {@code -c key=value} overrides. */
         public GlobalOptions configOverrides(String... v) { this.configOverrides = v; return this; }
+        /** Sets the {@code --dangerously-bypass-approvals-and-sandbox} flag. */
         public GlobalOptions dangerouslyBypassApprovalsAndSandbox(boolean v) { this.dangerouslyBypassApprovalsAndSandbox = v; return this; }
+        /** Sets the {@code --dangerously-bypass-hook-trust} flag. */
         public GlobalOptions dangerouslyBypassHookTrust(boolean v) { this.dangerouslyBypassHookTrust = v; return this; }
+        /** Sets the {@code --strict-config} flag. */
         public GlobalOptions strictConfig(boolean v) { this.strictConfig = v; return this; }
+        /** Sets one or more {@code --enable} flags. */
         public GlobalOptions enable(String... v) { this.enable = v; return this; }
+        /** Sets one or more {@code --disable} flags. */
         public GlobalOptions disable(String... v) { this.disable = v; return this; }
+        /** Sets the {@code --no-alt-screen} flag. */
         public GlobalOptions noAltScreen(boolean v) { this.noAltScreen = v; return this; }
 
+        /**
+         * Materialises the configured options into a positional argument list
+         * that contains ONLY the global flags &mdash; the caller is expected
+         * to append the desired sub-command and its own arguments afterwards.
+         *
+         * @return the CLI argument list.
+         */
         public String[] toArgs() {
             List<String> args = new ArrayList<>();
             if (model != null) { args.add("--model"); args.add(model); }
