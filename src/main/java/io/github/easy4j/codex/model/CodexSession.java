@@ -30,7 +30,7 @@ import lombok.Data;
  * <p>Unknown fields are intentionally tolerated so the SDK stays forward
  * compatible with future CLI revisions.</p>
  *
- * @author easy-4-java contributors
+ * @author [@Loong Wan](https://github.com/loong10k)
  * @since 3.0.0
  * @see CodexEvent
  */

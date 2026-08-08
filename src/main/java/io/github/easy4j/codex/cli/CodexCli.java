@@ -45,7 +45,7 @@ import java.util.List;
  * exact CLI flag spelling, isolating that knowledge from the rest of the code
  * base.</p>
  *
- * @author easy-4-java contributors
+ * @author [@Loong Wan](https://github.com/loong10k)
  * @since 3.0.0
  * @see <a href="https://github.com/openai/codex">Codex CLI</a>
  * @see CodexCliExecutor
@@ -796,7 +796,7 @@ public class CodexCli {
      * flags can be supplied through {@link #configOverrides(String...)} without
      * requiring changes to this class.</p>
      *
-     * @author easy-4-java contributors
+     * @author [@Loong Wan](https://github.com/loong10k)
      * @since 3.0.0
      */
     public static class ExecOptions {
@@ -830,47 +830,152 @@ public class CodexCli {
          */
         public ExecOptions(String prompt) { this.prompt = prompt; }
 
-        /** Sets the {@code --model} flag. */
+        /**
+         * Sets the {@code --model} flag.
+         *
+         * @param v the model identifier (e.g. {@code gpt-5-codex}).
+         * @return this builder for chaining.
+         */
         public ExecOptions model(String v) { this.model = v; return this; }
-        /** Sets the {@code --sandbox} flag. */
+        /**
+         * Sets the {@code --sandbox} flag.
+         *
+         * @param v the sandbox mode (e.g. {@code read-only}, {@code workspace-write}).
+         * @return this builder for chaining.
+         */
         public ExecOptions sandbox(String v) { this.sandbox = v; return this; }
-        /** Sets the {@code --ask-for-approval} flag. */
+        /**
+         * Sets the {@code --ask-for-approval} flag.
+         *
+         * @param v the approval policy (e.g. {@code untrusted}, {@code on-request}, {@code never}).
+         * @return this builder for chaining.
+         */
         public ExecOptions approvalPolicy(String v) { this.approvalPolicy = v; return this; }
-        /** Sets the {@code --profile} flag. */
+        /**
+         * Sets the {@code --profile} flag.
+         *
+         * @param v the configuration profile name.
+         * @return this builder for chaining.
+         */
         public ExecOptions profile(String v) { this.profile = v; return this; }
-        /** Sets the {@code -C} flag. */
+        /**
+         * Sets the {@code -C} flag.
+         *
+         * @param v the working directory for the CLI process.
+         * @return this builder for chaining.
+         */
         public ExecOptions workingDir(String v) { this.workingDir = v; return this; }
-        /** Sets the {@code --add-dir} flag. */
+        /**
+         * Sets the {@code --add-dir} flag.
+         *
+         * @param v additional directory granted to the agent at runtime.
+         * @return this builder for chaining.
+         */
         public ExecOptions addDir(String v) { this.addDir = v; return this; }
-        /** Sets the {@code -o} flag. */
+        /**
+         * Sets the {@code -o} flag.
+         *
+         * @param v destination file path for the final message.
+         * @return this builder for chaining.
+         */
         public ExecOptions outputFile(String v) { this.outputFile = v; return this; }
-        /** Sets the {@code --output-schema} flag. */
+        /**
+         * Sets the {@code --output-schema} flag.
+         *
+         * @param v path to a JSON Schema file describing the expected structured output.
+         * @return this builder for chaining.
+         */
         public ExecOptions outputSchema(String v) { this.outputSchema = v; return this; }
-        /** Sets the {@code --json} flag (default {@code true}). */
+        /**
+         * Sets the {@code --json} flag (default {@code true}).
+         *
+         * @param v {@code true} to enable JSON-Lines output, {@code false} to disable.
+         * @return this builder for chaining.
+         */
         public ExecOptions json(boolean v) { this.json = v; return this; }
-        /** Sets the {@code --ephemeral} flag. */
+        /**
+         * Sets the {@code --ephemeral} flag.
+         *
+         * @param v {@code true} to prevent session persistence to disk.
+         * @return this builder for chaining.
+         */
         public ExecOptions ephemeral(boolean v) { this.ephemeral = v; return this; }
-        /** Sets the {@code --skip-git-repo-check} flag. */
+        /**
+         * Sets the {@code --skip-git-repo-check} flag.
+         *
+         * @param v {@code true} to skip the git repository precondition check.
+         * @return this builder for chaining.
+         */
         public ExecOptions skipGitRepoCheck(boolean v) { this.skipGitRepoCheck = v; return this; }
-        /** Sets the {@code --oss} flag. */
+        /**
+         * Sets the {@code --oss} flag.
+         *
+         * @param v {@code true} to use the OSS provider instead of OpenAI-hosted models.
+         * @return this builder for chaining.
+         */
         public ExecOptions oss(boolean v) { this.oss = v; return this; }
-        /** Sets the {@code --local-provider} flag. */
+        /**
+         * Sets the {@code --local-provider} flag.
+         *
+         * @param v the local provider name (e.g. {@code lmstudio}, {@code ollama}).
+         * @return this builder for chaining.
+         */
         public ExecOptions localProvider(String v) { this.localProvider = v; return this; }
-        /** Sets the {@code --search} flag. */
+        /**
+         * Sets the {@code --search} flag.
+         *
+         * @param v {@code true} to enable the web-search tool during execution.
+         * @return this builder for chaining.
+         */
         public ExecOptions search(boolean v) { this.search = v; return this; }
-        /** Sets the {@code --image} flag. */
+        /**
+         * Sets the {@code --image} flag.
+         *
+         * @param v path to an image attachment forwarded to the agent.
+         * @return this builder for chaining.
+         */
         public ExecOptions image(String v) { this.image = v; return this; }
-        /** Sets one or more {@code -c key=value} overrides. */
+        /**
+         * Sets one or more {@code -c key=value} overrides.
+         *
+         * @param v configuration override entries; each element becomes a separate {@code -c} flag.
+         * @return this builder for chaining.
+         */
         public ExecOptions configOverrides(String... v) { this.configOverrides = v; return this; }
-        /** Sets the {@code --dangerously-bypass-approvals-and-sandbox} flag. */
+        /**
+         * Sets the {@code --dangerously-bypass-approvals-and-sandbox} flag.
+         *
+         * @param v {@code true} to bypass ALL approval prompts and the OS sandbox.
+         * @return this builder for chaining.
+         */
         public ExecOptions dangerouslyBypassApprovalsAndSandbox(boolean v) { this.dangerouslyBypassApprovalsAndSandbox = v; return this; }
-        /** Sets the {@code --dangerously-bypass-hook-trust} flag. */
+        /**
+         * Sets the {@code --dangerously-bypass-hook-trust} flag.
+         *
+         * @param v {@code true} to skip trust verification for plugin hooks.
+         * @return this builder for chaining.
+         */
         public ExecOptions dangerouslyBypassHookTrust(boolean v) { this.dangerouslyBypassHookTrust = v; return this; }
-        /** Sets the {@code --strict-config} flag. */
+        /**
+         * Sets the {@code --strict-config} flag.
+         *
+         * @param v {@code true} to fail fast on unknown configuration keys.
+         * @return this builder for chaining.
+         */
         public ExecOptions strictConfig(boolean v) { this.strictConfig = v; return this; }
-        /** Sets one or more {@code --enable} flags. */
+        /**
+         * Sets one or more {@code --enable} flags.
+         *
+         * @param v feature flag names to enable.
+         * @return this builder for chaining.
+         */
         public ExecOptions enable(String... v) { this.enable = v; return this; }
-        /** Sets one or more {@code --disable} flags. */
+        /**
+         * Sets one or more {@code --disable} flags.
+         *
+         * @param v feature flag names to disable.
+         * @return this builder for chaining.
+         */
         public ExecOptions disable(String... v) { this.disable = v; return this; }
 
         /**
@@ -925,7 +1030,7 @@ public class CodexCli {
      * {@code "exec"} because the global flags apply to whichever sub-command
      * follows them.</p>
      *
-     * @author easy-4-java contributors
+     * @author [@Loong Wan](https://github.com/loong10k)
      * @since 3.0.0
      */
     public static class GlobalOptions {
@@ -947,39 +1052,124 @@ public class CodexCli {
         private String[] disable;
         private boolean noAltScreen;
 
-        /** Sets the {@code --model} flag. */
+        /**
+         * Sets the {@code --model} flag.
+         *
+         * @param v the model identifier (e.g. {@code gpt-5-codex}).
+         * @return this builder for chaining.
+         */
         public GlobalOptions model(String v) { this.model = v; return this; }
-        /** Sets the {@code --sandbox} flag. */
+        /**
+         * Sets the {@code --sandbox} flag.
+         *
+         * @param v the sandbox mode (e.g. {@code read-only}, {@code workspace-write}).
+         * @return this builder for chaining.
+         */
         public GlobalOptions sandbox(String v) { this.sandbox = v; return this; }
-        /** Sets the {@code --ask-for-approval} flag. */
+        /**
+         * Sets the {@code --ask-for-approval} flag.
+         *
+         * @param v the approval policy (e.g. {@code untrusted}, {@code on-request}, {@code never}).
+         * @return this builder for chaining.
+         */
         public GlobalOptions approvalPolicy(String v) { this.approvalPolicy = v; return this; }
-        /** Sets the {@code --profile} flag. */
+        /**
+         * Sets the {@code --profile} flag.
+         *
+         * @param v the configuration profile name.
+         * @return this builder for chaining.
+         */
         public GlobalOptions profile(String v) { this.profile = v; return this; }
-        /** Sets the {@code -C} flag. */
+        /**
+         * Sets the {@code -C} flag.
+         *
+         * @param v the working directory for the CLI process.
+         * @return this builder for chaining.
+         */
         public GlobalOptions workingDir(String v) { this.workingDir = v; return this; }
-        /** Sets the {@code --add-dir} flag. */
+        /**
+         * Sets the {@code --add-dir} flag.
+         *
+         * @param v additional directory granted to the agent at runtime.
+         * @return this builder for chaining.
+         */
         public GlobalOptions addDir(String v) { this.addDir = v; return this; }
-        /** Sets the {@code --oss} flag. */
+        /**
+         * Sets the {@code --oss} flag.
+         *
+         * @param v {@code true} to use the OSS provider instead of OpenAI-hosted models.
+         * @return this builder for chaining.
+         */
         public GlobalOptions oss(boolean v) { this.oss = v; return this; }
-        /** Sets the {@code --local-provider} flag. */
+        /**
+         * Sets the {@code --local-provider} flag.
+         *
+         * @param v the local provider name (e.g. {@code lmstudio}, {@code ollama}).
+         * @return this builder for chaining.
+         */
         public GlobalOptions localProvider(String v) { this.localProvider = v; return this; }
-        /** Sets the {@code --search} flag. */
+        /**
+         * Sets the {@code --search} flag.
+         *
+         * @param v {@code true} to enable the web-search tool during execution.
+         * @return this builder for chaining.
+         */
         public GlobalOptions search(boolean v) { this.search = v; return this; }
-        /** Sets one or more {@code --image} flags. */
+        /**
+         * Sets one or more {@code --image} flags.
+         *
+         * @param v paths to image attachments forwarded to the agent.
+         * @return this builder for chaining.
+         */
         public GlobalOptions image(String... v) { this.image = v; return this; }
-        /** Sets one or more {@code -c key=value} overrides. */
+        /**
+         * Sets one or more {@code -c key=value} overrides.
+         *
+         * @param v configuration override entries; each element becomes a separate {@code -c} flag.
+         * @return this builder for chaining.
+         */
         public GlobalOptions configOverrides(String... v) { this.configOverrides = v; return this; }
-        /** Sets the {@code --dangerously-bypass-approvals-and-sandbox} flag. */
+        /**
+         * Sets the {@code --dangerously-bypass-approvals-and-sandbox} flag.
+         *
+         * @param v {@code true} to bypass ALL approval prompts and the OS sandbox.
+         * @return this builder for chaining.
+         */
         public GlobalOptions dangerouslyBypassApprovalsAndSandbox(boolean v) { this.dangerouslyBypassApprovalsAndSandbox = v; return this; }
-        /** Sets the {@code --dangerously-bypass-hook-trust} flag. */
+        /**
+         * Sets the {@code --dangerously-bypass-hook-trust} flag.
+         *
+         * @param v {@code true} to skip trust verification for plugin hooks.
+         * @return this builder for chaining.
+         */
         public GlobalOptions dangerouslyBypassHookTrust(boolean v) { this.dangerouslyBypassHookTrust = v; return this; }
-        /** Sets the {@code --strict-config} flag. */
+        /**
+         * Sets the {@code --strict-config} flag.
+         *
+         * @param v {@code true} to fail fast on unknown configuration keys.
+         * @return this builder for chaining.
+         */
         public GlobalOptions strictConfig(boolean v) { this.strictConfig = v; return this; }
-        /** Sets one or more {@code --enable} flags. */
+        /**
+         * Sets one or more {@code --enable} flags.
+         *
+         * @param v feature flag names to enable.
+         * @return this builder for chaining.
+         */
         public GlobalOptions enable(String... v) { this.enable = v; return this; }
-        /** Sets one or more {@code --disable} flags. */
+        /**
+         * Sets one or more {@code --disable} flags.
+         *
+         * @param v feature flag names to disable.
+         * @return this builder for chaining.
+         */
         public GlobalOptions disable(String... v) { this.disable = v; return this; }
-        /** Sets the {@code --no-alt-screen} flag. */
+        /**
+         * Sets the {@code --no-alt-screen} flag.
+         *
+         * @param v {@code true} to disable the alternate-screen mode in the interactive TUI.
+         * @return this builder for chaining.
+         */
         public GlobalOptions noAltScreen(boolean v) { this.noAltScreen = v; return this; }
 
         /**

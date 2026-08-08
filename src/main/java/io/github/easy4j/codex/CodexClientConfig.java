@@ -34,7 +34,7 @@ import lombok.Data;
  * while the bypass flags default to {@code false} so that operations always
  * require approvals unless explicitly opted-in.</p>
  *
- * @author easy-4-java contributors
+ * @author [@Loong Wan](https://github.com/loong10k)
  * @since 3.0.0
  * @see CodexClient
  */

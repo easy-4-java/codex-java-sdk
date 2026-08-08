@@ -34,7 +34,7 @@ import lombok.Data;
  * encapsulate the common predicate checks so that callers do not have to
  * inspect the raw exit code or stderr payload themselves.</p>
  *
- * @author easy-4-java contributors
+ * @author [@Loong Wan](https://github.com/loong10k)
  * @since 3.0.0
  * @see CodexCliExecutor
  * @see CodexCli

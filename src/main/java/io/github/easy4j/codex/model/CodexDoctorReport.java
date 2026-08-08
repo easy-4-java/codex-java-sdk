@@ -30,7 +30,7 @@ import java.util.List;
  * the raw JSON shape. Unknown properties are tolerated so the SDK remains
  * compatible with future CLI versions.</p>
  *
- * @author easy-4-java contributors
+ * @author [@Loong Wan](https://github.com/loong10k)
  * @since 3.0.0
  * @see CodexEvent
  */
