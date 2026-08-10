@@ -337,7 +337,8 @@
                 <jdk>[1.8,)</jdk>
             </activation>
             <properties>
-                <additionalparam>-Xdoclint:none</additionalparam>
+        <!-- Dependency versions -->
+        <additionalparam>-Xdoclint:none</additionalparam>
                 </properties>
         </profile>
         
