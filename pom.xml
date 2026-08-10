@@ -484,6 +484,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>1.8</java.version>
+        <maven.compiler.release>${java.version}</maven.compiler.release>
         <maven.version>3.0</maven.version>
         <jackson.version>2.17.2</jackson.version>
         <commons-exec.version>1.4.0</commons-exec.version>
