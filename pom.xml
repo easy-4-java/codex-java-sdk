@@ -482,15 +482,16 @@
 
     <!-- 版本属性定义：Java 版本、依赖版本与 Maven 插件版本统一管理 -->
     <properties>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>17</java.version>
         <maven.version>3.0</maven.version>
-        <jackson.version>2.17.2</jackson.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Dependency versions -->
         <commons-exec.version>1.4.0</commons-exec.version>
-        <slf4j.version>2.0.18</slf4j.version>
-        <lombok.version>1.18.46</lombok.version>
-        <junit.version>5.11.4</junit.version>
+        <jackson.version>2.17.2</jackson.version>
         <junit-jupiter.version>6.1.0</junit-jupiter.version>
+        <junit.version>5.11.4</junit.version>
+        <lombok.version>1.18.46</lombok.version>
+        <slf4j.version>2.0.18</slf4j.version>
         <!-- Maven Plugin versions -->
         <maven-clean-plugin.version>3.5.0</maven-clean-plugin.version>
         <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
@@ -501,11 +502,11 @@
         <maven-install-plugin.version>3.1.4</maven-install-plugin.version>
         <maven-jar-plugin.version>3.5.0</maven-jar-plugin.version>
         <maven-javadoc-plugin.version>3.11.2</maven-javadoc-plugin.version>
+        <maven-nexus-staging-plugin.version>1.7.0</maven-nexus-staging-plugin.version>
         <maven-release-plugin.version>3.3.1</maven-release-plugin.version>
         <maven-resources-plugin.version>3.5.0</maven-resources-plugin.version>
-        <maven-surefire-plugin.version>3.5.2</maven-surefire-plugin.version>
         <maven-source-plugin.version>3.4.0</maven-source-plugin.version>
-        <maven-nexus-staging-plugin.version>1.7.0</maven-nexus-staging-plugin.version>
+        <maven-surefire-plugin.version>3.5.2</maven-surefire-plugin.version>
     </properties>
 
     <!-- 依赖版本统一管理（dependencyManagement） -->
