@@ -339,9 +339,11 @@
                 <jdk>[1.8,)</jdk>
             </activation>
             <properties>
-                <maven-central-publishing-plugin.version>0.11.0</maven-central-publishing-plugin.version>
-                <additionalparam>-Xdoclint:none</additionalparam>
-                <maven-jacoco-plugin.version>0.8.15</maven-jacoco-plugin.version>
+        <!-- Dependency versions -->
+        <additionalparam>-Xdoclint:none</additionalparam>
+        <!-- Maven Plugin versions -->
+        <maven-central-publishing-plugin.version>0.11.0</maven-central-publishing-plugin.version>
+        <maven-jacoco-plugin.version>0.8.15</maven-jacoco-plugin.version>
             </properties>
         </profile>
         <!-- 发布到 Maven Central Portal：mvn -Prelease deploy（GPG 签名 + 源码 + Javadoc + Central 发布插件） -->
