@@ -52,7 +52,7 @@ import java.util.Objects;
  * decodes the standard output into a {@code List<CodexEvent>} using a private
  * Jackson {@link ObjectMapper} that ignores unknown properties.</p>
  *
- * @author [@Loong Wan](https://github.com/loong10k)
+ * @author <a href="https://github.com/loong10k">Loong Wan</a>
  * @since 3.0.0
  * @see CodexClientConfig
  * @see CodexCli

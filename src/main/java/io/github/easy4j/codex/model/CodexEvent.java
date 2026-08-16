@@ -33,7 +33,7 @@ import lombok.Data;
  * who need strongly-typed access should re-deserialise those fields with
  * Jackson once the concrete schema is known.</p>
  *
- * @author [@Loong Wan](https://github.com/loong10k)
+ * @author <a href="https://github.com/loong10k">Loong Wan</a>
  * @since 3.0.0
  * @see CodexDoctorReport
  * @see CodexSession
