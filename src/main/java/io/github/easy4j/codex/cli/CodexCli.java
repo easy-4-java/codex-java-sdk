@@ -45,7 +45,7 @@ import java.util.List;
  * exact CLI flag spelling, isolating that knowledge from the rest of the code
  * base.</p>
  *
- * @author [@Loong Wan](https://github.com/loong10k)
+ * @author <a href="https://github.com/loong10k">Loong Wan</a>
  * @since 3.0.0
  * @see <a href="https://github.com/openai/codex">Codex CLI</a>
  * @see CodexCliExecutor
@@ -796,7 +796,7 @@ public class CodexCli {
      * flags can be supplied through {@link #configOverrides(String...)} without
      * requiring changes to this class.</p>
      *
-     * @author [@Loong Wan](https://github.com/loong10k)
+     * @author <a href="https://github.com/loong10k">Loong Wan</a>
      * @since 3.0.0
      */
     public static class ExecOptions {
@@ -1030,7 +1030,7 @@ public class CodexCli {
      * {@code "exec"} because the global flags apply to whichever sub-command
      * follows them.</p>
      *
-     * @author [@Loong Wan](https://github.com/loong10k)
+     * @author <a href="https://github.com/loong10k">Loong Wan</a>
      * @since 3.0.0
      */
     public static class GlobalOptions {

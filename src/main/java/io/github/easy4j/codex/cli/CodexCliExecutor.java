@@ -45,7 +45,7 @@ import java.io.IOException;
  * injected configuration) so it can be safely shared between threads and
  * pooled by higher-level components.</p>
  *
- * @author [@Loong Wan](https://github.com/loong10k)
+ * @author <a href="https://github.com/loong10k">Loong Wan</a>
  * @since 3.0.0
  * @see CodexCliResult
  */
