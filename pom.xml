@@ -483,7 +483,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- Dependency versions -->
         <commons-exec.version>1.6.0</commons-exec.version>
-        <jackson.version>2.22.0</jackson.version>
+        <jackson.version>3.2.1</jackson.version>
+        <jackson-bom.version>3.2.1</jackson-bom.version>
         <junit-jupiter.version>6.1.0</junit-jupiter.version>
         <junit.version>5.11.4</junit.version>
         <lombok.version>1.18.46</lombok.version>
@@ -510,12 +511,15 @@
     
     <dependencyManagement>
         <dependencies>
-            
+            <!-- Jackson BOM -->
             <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-databind</artifactId>
-                <version>${jackson.version}</version>
+                <groupId>tools.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson-bom.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
+            
             
             <dependency>
                 <groupId>org.apache.commons</groupId>
@@ -549,7 +553,7 @@
     <dependencies>
         
         <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
+            <groupId>tools.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
         

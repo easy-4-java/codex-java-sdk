@@ -15,9 +15,10 @@
  */
 package io.github.easy4j.codex;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import io.github.easy4j.codex.cli.CodexCli;
 import io.github.easy4j.codex.cli.CodexCliExecutor;
 import io.github.easy4j.codex.cli.CodexCliResult;
@@ -61,8 +62,7 @@ import java.util.Objects;
 public class CodexClient implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(CodexClient.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper()
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private static final ObjectMapper MAPPER = JsonMapper.builder().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build();
 
     private final CodexClientConfig config;
     private final CodexCli cli;

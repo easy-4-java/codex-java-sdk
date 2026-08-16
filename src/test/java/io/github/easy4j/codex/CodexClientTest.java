@@ -15,7 +15,8 @@
  */
 package io.github.easy4j.codex;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import io.github.easy4j.codex.cli.CodexCli;
 import io.github.easy4j.codex.cli.CodexCliExecutor;
 import io.github.easy4j.codex.cli.CodexCliResult;
@@ -43,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class CodexClientTest {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = new JsonMapper();
 
     private static CodexClientConfig echoConfig() {
         CodexClientConfig config = new CodexClientConfig();

@@ -15,7 +15,8 @@
  */
 package io.github.easy4j.codex.model;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -32,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  */
 class CodexDoctorReportTest {
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = new JsonMapper();
 
     @Test
     void shouldProvideSensibleDefaults() {
@@ -95,7 +96,7 @@ class CodexDoctorReportTest {
     void shouldIgnoreUnknownPropertiesOnCheckItem() throws Exception {
         String json = "{\"name\":\"X\",\"status\":\"ok\",\"extra\":42,\"nested\":{}}";
         CodexDoctorReport.CheckItem item =
-                new ObjectMapper().readValue(json, CodexDoctorReport.CheckItem.class);
+                new JsonMapper().readValue(json, CodexDoctorReport.CheckItem.class);
 
         assertEquals("X", item.getName());
         assertEquals("ok", item.getStatus());
