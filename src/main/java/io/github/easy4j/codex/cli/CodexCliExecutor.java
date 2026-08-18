@@ -1,6 +1,6 @@
-package io.github.hiwepy.codex.cli;
+package io.github.easy4j.codex.cli;
 
-import io.github.hiwepy.codex.CodexClientConfig;
+import io.github.easy4j.codex.CodexClientConfig;
 import org.apache.commons.exec.CommandLine;
 import org.apache.commons.exec.DefaultExecutor;
 import org.apache.commons.exec.ExecuteWatchdog;
