@@ -62,10 +62,6 @@
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>${maven-compiler-plugin.version}</version>
                     <configuration>
-                        <!-- 源代码编译版本 -->
-                        <source>${java.version}</source>
-                        <!-- 目标平台编译版本 -->
-                        <target>${java.version}</target>
                         <!-- 字符集编码 -->
                         <encoding>${project.build.sourceEncoding}</encoding>
                         <!-- 编译最大内存 -->
@@ -313,8 +309,6 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>${maven-compiler-plugin.version}</version>
                 <configuration>
-                    <source>${java.version}</source>
-                    <target>${java.version}</target>
                     <!-- 保留方法参数名，支持 Spring MVC 按参数名绑定 -->
                     <parameters>true</parameters>
                     <encoding>${project.build.sourceEncoding}</encoding>
@@ -485,7 +479,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>1.8</java.version>
         <maven.compiler.release>${java.version}</maven.compiler.release>
-        <maven.version>3.0</maven.version>
+        <maven.version>3.9.16</maven.version>
         <jackson-bom.version>2.18.9</jackson-bom.version>
         <commons-exec.version>1.4.0</commons-exec.version>
         <slf4j.version>2.0.18</slf4j.version>
