@@ -16,6 +16,7 @@
 package io.github.easy4j.codex.model;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -30,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  */
 class CodexEventTest {
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = new JsonMapper();
 
     @Test
     void shouldProvideSensibleDefaults() {
@@ -51,7 +52,7 @@ class CodexEventTest {
         event.setMessage("hello");
         event.setTaskId("task-1");
         event.setSessionId("sess-1");
-        event.setData(java.util.Map.of("k", "v"));
+        event.setData(java.util.Collections.singletonMap("k", "v"));
 
         String json = mapper.writeValueAsString(event);
         CodexEvent parsed = mapper.readValue(json, CodexEvent.class);

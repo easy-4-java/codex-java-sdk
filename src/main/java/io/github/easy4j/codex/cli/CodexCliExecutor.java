@@ -22,8 +22,10 @@ import org.apache.commons.exec.ExecuteWatchdog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Thin wrapper around Apache Commons {@code exec} that launches the local
@@ -86,6 +88,28 @@ public class CodexCliExecutor {
      * @return a {@link CodexCliResult} describing the outcome; never {@code null}.
      */
     public CodexCliResult execute(String... args) {
+        return runProcess(null, args);
+    }
+
+    /**
+     * Runs the {@code codex} executable with the given CLI arguments, feeding
+     * {@code stdin} to the child process.
+     *
+     * <p>Used by commands that read their payload from standard input, such as
+     * {@code codex login --with-api-key}. A {@code null} or empty {@code stdin}
+     * behaves exactly like {@link #execute(String...)} &mdash; the child
+     * inherits no pipe content. Failure modes are identical to the varargs
+     * overload.</p>
+     *
+     * @param stdin optional text piped to the child process's standard input.
+     * @param args  CLI arguments to pass to the {@code codex} binary.
+     * @return a {@link CodexCliResult} describing the outcome; never {@code null}.
+     */
+    public CodexCliResult executeWithStdin(String stdin, String... args) {
+        return runProcess(stdin, args);
+    }
+
+    private CodexCliResult runProcess(String stdin, String... args) {
         CommandLine cmd = CommandLine.parse(config.getLocalExecutable());
         for (String arg : args) {
             if (arg != null) {
@@ -96,7 +120,12 @@ public class CodexCliExecutor {
         DefaultExecutor executor = new DefaultExecutor();
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
         ByteArrayOutputStream stderr = new ByteArrayOutputStream();
-        executor.setStreamHandler(new org.apache.commons.exec.PumpStreamHandler(stdout, stderr));
+        if (stdin != null && !stdin.isEmpty()) {
+            executor.setStreamHandler(new org.apache.commons.exec.PumpStreamHandler(stdout, stderr,
+                    new ByteArrayInputStream(stdin.getBytes(StandardCharsets.UTF_8))));
+        } else {
+            executor.setStreamHandler(new org.apache.commons.exec.PumpStreamHandler(stdout, stderr));
+        }
 
         long timeoutMs = config.getLocalTimeoutSeconds() * 1000L;
         ExecuteWatchdog watchdog = new ExecuteWatchdog(timeoutMs);

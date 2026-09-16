@@ -16,6 +16,7 @@
 package io.github.easy4j.codex;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import io.github.easy4j.codex.cli.CodexCli;
 import io.github.easy4j.codex.cli.CodexCliExecutor;
 import io.github.easy4j.codex.cli.CodexCliResult;
@@ -24,6 +25,7 @@ import io.github.easy4j.codex.model.CodexEvent;
 import io.github.easy4j.codex.model.CodexSession;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Paths;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,19 +37,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Unit tests for {@link CodexClient}.
  *
- * <p>Uses {@code /bin/echo} as the CLI executable so that argument
- * assembly and JSON parsing can be verified without depending on the
- * real {@code codex} binary.</p>
+ * <p>Uses the {@code echo-args.sh} test fixture as the CLI executable so that
+ * argument assembly and JSON parsing can be verified without depending on the
+ * real {@code codex} binary. {@code /bin/echo} cannot be used because GNU
+ * coreutils echo (Linux) interprets {@code --version} as a flag while BSD echo
+ * (macOS) prints it literally.</p>
  *
  * @since 3.0.0
  */
 class CodexClientTest {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = new JsonMapper();
+
+    /** Absolute path of the argument-echoing fixture script (surefire runs from the module base dir). */
+    private static final String ECHO_ARGS_SCRIPT =
+            Paths.get("src", "test", "resources", "echo-args.sh").toAbsolutePath().toString();
 
     private static CodexClientConfig echoConfig() {
         CodexClientConfig config = new CodexClientConfig();
-        config.setLocalExecutable("/bin/echo");
+        config.setLocalExecutable(ECHO_ARGS_SCRIPT);
         config.setLocalTimeoutSeconds(2);
         return config;
     }
@@ -457,6 +465,31 @@ class CodexClientTest {
     }
 
     @Test
+    void shouldDelegateLoginVariants() {
+        assertTrue(echoClient().loginWithApiKey("sk-test").getStdout().contains("--with-api-key"));
+        assertTrue(echoClient().loginWithAccessToken("tok-1").getStdout().contains("--with-access-token"));
+        assertTrue(echoClient().loginDeviceAuth().getStdout().contains("--device-auth"));
+        assertTrue(echoClient().loginStatus().getStdout().contains("status"));
+    }
+
+    @Test
+    void shouldDelegateQueueAndDelete() {
+        CodexCliResult queued = echoClient().queue("sess-1", "continue");
+        assertTrue(queued.getStdout().contains("queue"));
+        assertTrue(queued.getStdout().contains("--thread sess-1"));
+        assertTrue(queued.getStdout().contains("--message continue"));
+
+        assertTrue(echoClient().deleteSession("sess-1").getStdout().contains("delete"));
+        assertTrue(echoClient().deleteSessionForce("uuid-1").getStdout().contains("--force"));
+    }
+
+    @Test
+    void shouldDelegateAgentsAndMigrateRollouts() {
+        assertTrue(echoClient().agents().getStdout().contains("agents"));
+        assertTrue(echoClient().migrateRollouts("inspect").getStdout().contains("migrate-rollouts"));
+    }
+
+    @Test
     void shouldDelegateMcpList() {
         CodexCliResult result = echoClient().mcpList();
         assertTrue(result.getStdout().contains("mcp"));
@@ -554,7 +587,7 @@ class CodexClientTest {
     @Test
     void shouldDelegateSandboxWithProfile() {
         CodexCliResult result = echoClient().sandbox("strict", new String[]{"ls"});
-        assertTrue(result.getStdout().contains("--permissions-profile"));
+        assertTrue(result.getStdout().contains("--permission-profile"));
     }
 
     @Test

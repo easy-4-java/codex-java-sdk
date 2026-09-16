@@ -91,6 +91,26 @@ class CodexCliExecutorTest {
     }
 
     @Test
+    void shouldFeedStdinToChildProcess() {
+        // `cat` with no file arguments echoes its standard input verbatim,
+        // which is how `codex login --with-api-key` consumes the key.
+        CodexCliExecutor executor = new CodexCliExecutor(configFor("/bin/cat"));
+
+        CodexCliResult result = executor.executeWithStdin("secret-api-key");
+
+        assertEquals(0, result.getExitCode());
+        assertEquals("secret-api-key", result.getStdout());
+    }
+
+    @Test
+    void shouldExecuteWithoutStdinAsBefore() {
+        CodexCliExecutor executor = new CodexCliExecutor(configFor("/bin/echo"));
+
+        assertEquals("plain", executor.executeWithStdin(null, "plain").getStdout());
+        assertEquals("plain", executor.executeWithStdin("", "plain").getStdout());
+    }
+
+    @Test
     void shouldReportSuccessFromProbeWhenExecutableWorks() {
         CodexCliExecutor executor = new CodexCliExecutor(configFor("/bin/echo"));
 
