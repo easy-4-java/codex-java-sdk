@@ -143,8 +143,8 @@ public class CodexCliExecutor {
         long startNanos = System.nanoTime();
         try {
             int exitCode = executor.execute(cmd);
-            String out = stdout.toString().trim();
-            String err = stderr.toString().trim();
+            String out = utf8(stdout).trim();
+            String err = utf8(stderr).trim();
             log.debug("codex CLI executed: exitCode={}, stdout.len={}", exitCode, out.length());
             if (watchdog.killedProcess()) {
                 return new CodexCliResult(-1, out, "codex CLI timed out after " + timeoutMs + " ms\n" + err);
@@ -157,8 +157,8 @@ public class CodexCliExecutor {
             // with the real exit code instead of discarding the output. The
             // deadline check makes the timeout verdict race-free even when
             // {@code watchdog.killedProcess()} has not observed the kill yet.
-            String out = stdout.toString().trim();
-            String err = stderr.toString().trim();
+            String out = utf8(stdout).trim();
+            String err = utf8(stderr).trim();
             boolean timedOut = watchdog.killedProcess()
                     || System.nanoTime() - startNanos >= timeoutMs * 1_000_000L;
             if (timedOut) {
@@ -169,6 +169,21 @@ public class CodexCliExecutor {
             return new CodexCliResult(e.getExitValue(), out, err);
         } catch (IOException e) {
             return new CodexCliResult(-1, "", e.getMessage());
+        }
+    }
+
+    /**
+     * Decodes the captured buffer as UTF-8 — the CLIs emit UTF-8 regardless of
+     * platform, and the platform default charset would mojibake the output on
+     * GBK-default Windows. {@code ByteArrayOutputStream.toString(Charset)}
+     * only exists since Java 10, so the JDK 8 line goes through the String
+     * name variant with an unreachable fallback (UTF-8 is guaranteed).
+     */
+    private static String utf8(ByteArrayOutputStream buffer) {
+        try {
+            return buffer.toString("UTF-8");
+        } catch (java.io.UnsupportedEncodingException e) {
+            return buffer.toString();
         }
     }
 
