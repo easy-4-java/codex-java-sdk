@@ -120,12 +120,12 @@ public class CodexCliExecutor {
         DefaultExecutor executor = new DefaultExecutor();
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
         ByteArrayOutputStream stderr = new ByteArrayOutputStream();
-        if (stdin != null && !stdin.isEmpty()) {
-            executor.setStreamHandler(new org.apache.commons.exec.PumpStreamHandler(stdout, stderr,
-                    new ByteArrayInputStream(stdin.getBytes(StandardCharsets.UTF_8))));
-        } else {
-            executor.setStreamHandler(new org.apache.commons.exec.PumpStreamHandler(stdout, stderr));
-        }
+        // Always hand the child a (possibly empty) stdin pipe that closes
+        // right after the payload: consumers like `codex login --with-api-key`
+        // read to EOF, and a closed pipe cannot race the input pump.
+        byte[] stdinBytes = stdin == null ? new byte[0] : stdin.getBytes(StandardCharsets.UTF_8);
+        executor.setStreamHandler(new org.apache.commons.exec.PumpStreamHandler(stdout, stderr,
+                new ByteArrayInputStream(stdinBytes)));
 
         long timeoutMs = config.getLocalTimeoutSeconds() * 1000L;
         ExecuteWatchdog watchdog = new ExecuteWatchdog(timeoutMs);
