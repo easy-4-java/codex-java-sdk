@@ -25,6 +25,7 @@ import io.github.easy4j.codex.model.CodexEvent;
 import io.github.easy4j.codex.model.CodexSession;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -36,9 +37,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Unit tests for {@link CodexClient}.
  *
- * <p>Uses {@code /bin/echo} as the CLI executable so that argument
- * assembly and JSON parsing can be verified without depending on the
- * real {@code codex} binary.</p>
+ * <p>Uses the {@code echo-args.sh} test fixture as the CLI executable so that
+ * argument assembly and JSON parsing can be verified without depending on the
+ * real {@code codex} binary. {@code /bin/echo} cannot be used because GNU
+ * coreutils echo (Linux) interprets {@code --version} as a flag while BSD echo
+ * (macOS) prints it literally.</p>
  *
  * @since 3.0.0
  */
@@ -46,9 +49,13 @@ class CodexClientTest {
 
     private static final ObjectMapper MAPPER = new JsonMapper();
 
+    /** Absolute path of the argument-echoing fixture script (surefire runs from the module base dir). */
+    private static final String ECHO_ARGS_SCRIPT =
+            Path.of("src", "test", "resources", "echo-args.sh").toAbsolutePath().toString();
+
     private static CodexClientConfig echoConfig() {
         CodexClientConfig config = new CodexClientConfig();
-        config.setLocalExecutable("/bin/echo");
+        config.setLocalExecutable(ECHO_ARGS_SCRIPT);
         config.setLocalTimeoutSeconds(2);
         return config;
     }
