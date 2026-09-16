@@ -222,6 +222,11 @@ public class CodexDemo {
 
 ### 7.1 `CodexAppServerConfig`（app-server WebSocket 路线）
 
+> **升级注意（3.0.x.x.20260630+）**：CLI 路线的参数改为原样传给子进程——
+> 含空格的多词 prompt 不再被塞进字面双引号后发给 `codex`。CLI 非零退出现在
+> 保留真实退出码与两路输出，不再折叠为 `exitCode=-1` 加空输出。通过明文
+> `ws://` 携带 Bearer token 会打告警日志，生产环境请优先 `wss://`。
+
 纯 POJO（可绑定 Spring `@ConfigurationProperties`）。字段名与常用的
 `CodexEndpoint` 绑定保持一致：
 
@@ -232,6 +237,8 @@ public class CodexDemo {
 | `connectTimeoutMillis` | int | `5000` | TCP/TLS + WebSocket 握手超时 |
 | `readTimeoutMillis` | int | `120000` | 单个 turn 全程上限（建连 → `turn/completed`） |
 | `maxSessionMappings` | int | `1000` | `sessionKey → threadId` LRU 上限；被淘汰的会话退化为新建线程 |
+| `maxFrameChars` | int | `1048576` | 帧累积硬上限；超限的服务器帧使 turn 失败（`<= 0` = 不限） |
+| `maxContentChars` | int | `1048576` | 单 turn agent 消息内容上限；超出部分截断并告警（`<= 0` = 不限） |
 
 ## 8. 核心用法 / API
 

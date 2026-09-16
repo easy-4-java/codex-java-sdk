@@ -64,8 +64,19 @@ class CodexCliExecutorTest {
 
         CodexCliResult result = executor.execute("-c", "exit 7");
 
-        assertEquals(-1, result.getExitCode());
         assertFalse(result.isSuccess());
+    }
+
+    @Test
+    void shouldPreserveRealExitCodeAndStreamsOnNonZeroExit() {
+        CodexCliExecutor executor = new CodexCliExecutor(configFor("/bin/sh"));
+
+        CodexCliResult result = executor.execute("-c", "echo out-marker; echo err-marker 1>&2; exit 7");
+
+        assertEquals(7, result.getExitCode());
+        assertFalse(result.isSuccess());
+        assertTrue(result.getStdout().contains("out-marker"), "stdout must survive a non-zero exit");
+        assertTrue(result.getStderr().contains("err-marker"), "stderr must survive a non-zero exit");
     }
 
     @Test
@@ -78,6 +89,16 @@ class CodexCliExecutorTest {
         assertFalse(result.isSuccess());
         assertNotNull(result.getStderr());
         assertFalse(result.getStderr().isEmpty());
+    }
+
+    @Test
+    void shouldPassArgumentsRawWithoutEmbeddedQuotes() {
+        CodexCliExecutor executor = new CodexCliExecutor(configFor("/bin/echo"));
+
+        CodexCliResult result = executor.execute("Write a failing test", "-c", "key=some value");
+
+        assertEquals("Write a failing test -c key=some value", result.getStdout(),
+                "multi-word arguments must arrive without embedded literal quotes");
     }
 
     @Test
