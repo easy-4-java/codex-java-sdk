@@ -2,11 +2,13 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-[![Java](https://img.shields.io/badge/Java-17-orange)](https://github.com/easy-4-java/codex-java-sdk) [![License](https://img.shields.io/badge/license-Apache%202.0-green)](https://www.apache.org/licenses/LICENSE-2.0.txt)
+[![Java](https://img.shields.io/badge/Java-21-orange)](https://github.com/easy-4-java/codex-java-sdk) [![License](https://img.shields.io/badge/license-Apache%202.0-green)](https://www.apache.org/licenses/LICENSE-2.0.txt)
 
-> [Codex CLI](https://github.com/openai/codex) 的 Java SDK：通过子进程集成驱动本地
-> `codex` 智能体（exec 非交互执行、交互会话、会话 resume / fork / archive、
-> doctor、review）。
+> [Codex CLI](https://github.com/openai/codex) 的 Java SDK，提供两条集成路线：
+> 本地子进程封装（驱动 `codex` 智能体的 exec 非交互执行、交互会话、会话
+> resume / fork / archive、doctor、review），以及面向远程 Codex app-server 的
+> JSON-RPC 2.0 over WebSocket 长连接客户端（`thread/start` → `turn/start` →
+> 通知流）。
 
 ## 目录
 
@@ -24,9 +26,12 @@
 
 ## 1. 项目概述
 
-`codex-java-sdk` 让 Java 应用把 [Codex CLI](https://github.com/openai/codex) 智能体
-（`codex`）作为本地子进程运行。它是 **CLI 封装**，不是直连 OpenAI API 客户端——
-每次调用都对应一次真实的 `codex` 命令行执行。
+`codex-java-sdk` 让 Java 应用通过两条路线集成 [Codex CLI](https://github.com/openai/codex)
+智能体（`codex`）。两条路线都不是直连 OpenAI API 客户端。
+
+- **CLI 路线（本地子进程）**——每次调用都对应一次真实的 `codex` 命令行执行。
+- **App-server 路线（远程长连接）**——面向运行中的 Codex app-server 的
+  JSON-RPC 2.0 over WebSocket 客户端。
 
 SDK 覆盖：
 
@@ -37,11 +42,15 @@ SDK 覆盖：
 - **解析模型** — `CodexEvent`（JSONL 事件）、`CodexSession`、`CodexDoctorReport`。
 - **工具类** — `doctor`、`review`、`login` / `logout`、MCP 管理、`update`、
   `features`、shell `completion`。
+- **App-server WebSocket 路线** — `CodexAppServerClient`：逐 turn 建连、
+  `thread/start` / `thread/resume` 会话复用（有界 `sessionKey → threadId` LRU）、
+  agent 消息流式 delta、`turn/completed` 收尾。
 
 它不是：
 
 - OpenAI API 客户端（不直接调用 OpenAI API）。
-- `codex` 二进制的替代品——必须安装并可直接运行的 CLI。
+- `codex` 二进制的替代品——本地路线必须安装并可运行 CLI；WebSocket 路线必须
+  能连通 Codex app-server。
 
 典型场景：
 
@@ -52,6 +61,7 @@ SDK 覆盖：
 | 长期运行的交互式智能体 | `startSession(prompt)` / `resumeSession(sessionId)` |
 | 在沙箱中复现会话 | `forkSession(sessionId)` / `execResume(sessionId, prompt)` |
 | 环境诊断 | `doctorSummary()` / `doctorJson()` |
+| 远程智能体 + 会话连续性 | `CodexAppServerClient.runTurn(request)` + `sessionKey` |
 
 ## 2. 功能与状态
 
@@ -63,18 +73,30 @@ SDK 覆盖：
 | 交互式会话 | 活跃开发 | `startSession()`、`startSession(prompt)`、`startSession(GlobalOptions, prompt)` |
 | 会话生命周期 | 活跃开发 | `resumeSession`、`resumeLastSession`、`forkSession`、`forkLastSession`、`archiveSession`、`unarchiveSession`、`execResume` |
 | Doctor 与 review | 活跃开发 | `doctor`、`doctorJson`、`doctorSummary`、`review`、`reviewCommit`、`reviewBase` |
-| 认证 / MCP / 其他 | 活跃开发 | `login`、`logout`、`mcpList` / `mcpAdd` / `mcpGet` / `mcpRemove`、`update`、`features`、`completion`、`app` |
-| 配置模型 | 活跃开发 | `CodexClientConfig` POJO（纯对象，可绑定 Spring 配置） |
+| 认证 / MCP / 其他 | 活跃开发 | `login`、`loginWithApiKey`、`loginWithAccessToken`、`loginDeviceAuth`、`loginStatus`、`logout`、`mcpList` / `mcpAdd` / `mcpGet` / `mcpRemove` / `mcpLogin` / `mcpLogout`、`update`、`features`、`completion`、`app` |
+| 会话管理 | 活跃开发 | `archiveSession`、`unarchiveSession`、`queue`、`deleteSession`、`deleteSessionForce`、`agents`、`migrateRollouts` |
+| App-server WebSocket 路线 | 活跃开发 | `CodexAppServerClient.runTurn` / `runTurnAsync`、`thread/start` / `thread/resume`、agent 消息 delta、`sessionKey → threadId` LRU（1000） |
+| 配置模型 | 活跃开发 | `CodexClientConfig` POJO（纯对象，可绑定 Spring 配置）、`CodexAppServerConfig` POJO |
 
-> **假设**：以上能力状态反映 1.0.x 分支当前情况；该模块处于活跃开发中。
+> **注意**：上游已移除 `codex mcp-server` 子命令——`CodexClient.mcpServer()`
+> 已标记废弃，请改用 `appServer(...)`。`ExecOptions` 额外支持
+> `--ignore-rules` / `--ignore-user-config`；`GlobalOptions` 支持
+> `--remote` / `--remote-auth-token-env`（连接远程 app-server 的 TUI 运行）。
+
+> **假设**：以上能力状态反映当前活跃分支的情况；该模块处于活跃开发中。
 
 ## 3. 环境要求与兼容性
 
 | 要求 | 版本 / 说明 |
 | :--- | :--- |
-| JDK | 17+ |
+| JDK | 21+ |
 | Maven | 3.0+（enforcer 强制；项目内置 Maven Wrapper `./mvnw`） |
-| Codex CLI | 必须安装且可执行（`localExecutable` 可配置路径） |
+| Codex CLI | 本地路线：必须安装且可执行（`localExecutable` 可配置路径） |
+| Codex app-server | 仅 WebSocket 路线：需要可达的 app-server（`baseUrl` 支持 ws/wss/http/https） |
+
+> **注意**：app-server WebSocket 路线使用 JDK 内置 `java.net.http.HttpClient`
+> （JDK 11+），仅在 `feature/2.0.x` 与 `feature/3.0.x` 版本线提供；
+> `feature/1.0.x`（JDK 8）线仅包含 CLI 路线。
 
 版本线：
 
@@ -87,20 +109,23 @@ SDK 覆盖：
 ## 4. 架构与模块
 
 ```text
-+------------------+   +------------------------------------------+
-| Java application |   | codex-java-sdk                            |
-|                  |-->|  CodexClient (facade)                    |
-| prompt / options |   |    | CodexCli (command mapping)          |
-|                  |   |    |   | CodexCliExecutor                |
-|                  |   |    |   |   `codex` child process         |
-|                  |   |    |   CodexCliResult                    |
-+------------------+   |    | CodexEvent/CodexSession/DoctorReport|
-                       +-------------------+----------------------+
++------------------+   +---------------------------------------------+
+| Java application |   | codex-java-sdk                               |
+|                  |-->|  路线 1（本地）: CodexClient (facade)         |
+| prompt / options |   |    | CodexCli (command mapping)             |
+|                  |   |    |   | CodexCliExecutor                   |
+|                  |   |    |   |   `codex` child process            |
+|                  |   |    |   CodexCliResult                       |
+|                  |   |  路线 2（远程）: CodexAppServerClient         |
+|                  |   |    | JSON-RPC 2.0 over WebSocket            |
+|                  |   |    | thread/start -> turn/start -> events   |
+|                  |   | CodexEvent/CodexSession/CodexDoctorReport    |
++------------------+   +-------------------+-------------------------+
                                            |
                                            v
                      +-------------------------------------------+
-                     | Local `codex` CLI (exec, session, doctor, |
-                     | review, login, ...)                       |
+                     | 本地 `codex` CLI（路线 1）或远程             |
+                     | Codex app-server（路线 2）                  |
                      +-------------------------------------------+
 ```
 
@@ -108,7 +133,7 @@ SDK 覆盖：
 
 | 构件 | 职责 |
 | :--- | :--- |
-| `io.github.easy4j:codex-java-sdk` | CLI 门面、命令映射、子进程执行器、结果与解析模型 |
+| `io.github.easy4j:codex-java-sdk` | CLI 门面、命令映射、子进程执行器、WebSocket app-server 客户端、结果与解析模型 |
 
 关键包：
 
@@ -116,6 +141,7 @@ SDK 覆盖：
 | :--- | :--- |
 | `io.github.easy4j.codex` | `CodexClient`、`CodexClientConfig` |
 | `io.github.easy4j.codex.cli` | `CodexCli`、`CodexCliExecutor`、`CodexCliResult` |
+| `io.github.easy4j.codex.appserver` | `CodexAppServerClient`、`CodexAppServerConfig`、`AppServerTurnRequest`、`AppServerTurnResult`、`ThreadMappingCache`、`CodexAppServerException` |
 | `io.github.easy4j.codex.model` | `CodexEvent`、`CodexSession`、`CodexDoctorReport` |
 
 ## 5. 安装
@@ -129,14 +155,14 @@ Maven：
 <dependency>
     <groupId>io.github.easy4j</groupId>
     <artifactId>codex-java-sdk</artifactId>
-    <version>2.0.x.x.20260630-SNAPSHOT</version>
+    <version>3.0.x.x.20260630-SNAPSHOT</version>
 </dependency>
 ```
 
 Gradle：
 
 ```groovy
-implementation 'io.github.easy4j:codex-java-sdk:2.0.x.x.20260630-SNAPSHOT'
+implementation 'io.github.easy4j:codex-java-sdk:3.0.x.x.20260630-SNAPSHOT'
 ```
 
 ## 6. 快速开始
@@ -194,6 +220,19 @@ public class CodexDemo {
 | `strictConfig` | boolean | `false` | 遇到未知配置字段即报错 |
 | `enable` / `disable` | String[] | - | 启用 / 禁用的 feature |
 
+### 7.1 `CodexAppServerConfig`（app-server WebSocket 路线）
+
+纯 POJO（可绑定 Spring `@ConfigurationProperties`）。字段名与常用的
+`CodexEndpoint` 绑定保持一致：
+
+| 字段 | 类型 | 默认值 | 说明 |
+| :--- | :--- | :--- | :--- |
+| `baseUrl` | String | - | app-server 基础地址（`ws://`/`wss://` 原样，`http://`/`https://` 自动升级） |
+| `token` | String | - | 握手时以 `Authorization: Bearer <token>` 携带的凭证 |
+| `connectTimeoutMillis` | int | `5000` | TCP/TLS + WebSocket 握手超时 |
+| `readTimeoutMillis` | int | `120000` | 单个 turn 全程上限（建连 → `turn/completed`） |
+| `maxSessionMappings` | int | `1000` | `sessionKey → threadId` LRU 上限；被淘汰的会话退化为新建线程 |
+
 ## 8. 核心用法 / API
 
 ### 8.1 JSONL 事件
@@ -219,6 +258,35 @@ try (CodexClient client = new CodexClient(config)) {
 }
 ```
 
+### 8.3 App-server WebSocket 路线（远程 Codex）
+
+```java
+import io.github.easy4j.codex.appserver.AppServerTurnRequest;
+import io.github.easy4j.codex.appserver.AppServerTurnResult;
+import io.github.easy4j.codex.appserver.CodexAppServerClient;
+import io.github.easy4j.codex.appserver.CodexAppServerConfig;
+
+CodexAppServerConfig config = new CodexAppServerConfig();
+config.setBaseUrl("ws://codex-host:8081");   // http(s) 自动升级为 ws(s)
+config.setToken("capability-token");
+config.setReadTimeoutMillis(120_000);
+
+try (CodexAppServerClient client = new CodexAppServerClient(config)) {
+    AppServerTurnResult result = client.runTurn(AppServerTurnRequest.builder()
+            .prompt("Fix the failing test")
+            .sessionKey("chat-42")                                  // 启用 thread/resume 会话复用
+            .onDelta(delta -> System.out.print(delta))              // agentMessage delta，按序回调
+            .build());
+    System.out.println(result.getThreadId() + " -> " + result.getContent());
+}
+```
+
+一个 turn 对应：`thread/start`（`sessionKey` 已有映射时走 `thread/resume`）→
+`turn/start` → `item/completed`（仅 agent 消息对外呈现）→ `turn/completed`。
+未知通知只记录 debug 日志，不中断 turn。失败——连接、JSON-RPC 错误、
+`turn/failed`、`error`、提前关闭或读超时——统一以 `CodexAppServerException`
+抛出。
+
 ## 9. 测试与构建
 
 ```bash
@@ -227,8 +295,9 @@ try (CodexClient client = new CodexClient(config)) {
 
 - 构建配置了 JaCoCo Maven 插件（报告 + 绑定在 `verify` 阶段的 `check` 目标，
   行覆盖率规则为 90%；`haltOnFailure=false`）。
-- **假设**：1.0.x 分支当前 `src/test` 下未提交测试源码；覆盖率门禁仅在存在测试时生效。
-- 本 worktree 的 `.github/` 下无 CI 工作流文件。
+- 活跃分支自带完整测试套件（`feature/3.0.x` 共 206 个测试），含针对进程内
+  假 app-server 的端到端 WebSocket 契约测试。
+- CI 工作流：`.github/workflows/ci.yml`。
 
 ## 10. 版本与分支
 
