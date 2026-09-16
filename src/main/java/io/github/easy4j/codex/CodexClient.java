@@ -790,6 +790,172 @@ public class CodexClient implements AutoCloseable {
     public CodexCliResult features() { return cli.features(); }
 
     /**
+     * Runs {@code codex debug models} — the raw model catalog as JSON.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult debugModels() { return cli.debugModels(); }
+
+    /**
+     * Runs {@code codex debug models --bundled} — only the bundled catalog.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult debugModelsBundled() { return cli.debugModelsBundled(); }
+
+    /**
+     * Runs {@code codex debug prompt-input <prompt>} — the model-visible
+     * prompt input list as JSON.
+     *
+     * @param prompt the prompt to render.
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult debugPromptInput(String prompt) { return cli.debugPromptInput(prompt); }
+
+    /**
+     * Runs {@code codex mcp add <name> --url <url>} — registers a streamable
+     * HTTP MCP server.
+     *
+     * @param name the MCP server name.
+     * @param url  the streamable HTTP endpoint URL.
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult mcpAddUrl(String name, String url) { return cli.mcpAddUrl(name, url); }
+
+    /**
+     * Runs {@code codex mcp add <name> --url <url> --bearer-token-env-var <env>}
+     * — registers an HTTP MCP server whose bearer token lives in an env var.
+     *
+     * @param name              the MCP server name.
+     * @param url               the streamable HTTP endpoint URL.
+     * @param bearerTokenEnvVar environment variable holding the bearer token.
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult mcpAddUrlWithBearer(String name, String url, String bearerTokenEnvVar) {
+        return cli.mcpAddUrlWithBearer(name, url, bearerTokenEnvVar);
+    }
+
+    /**
+     * Runs {@code codex plugin add <plugin[@marketplace]>}.
+     *
+     * @param pluginRef plugin reference.
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult pluginAdd(String pluginRef) { return cli.pluginAdd(pluginRef); }
+
+    /**
+     * Runs {@code codex plugin list}.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult pluginList() { return cli.pluginList(); }
+
+    /**
+     * Runs {@code codex plugin remove <plugin[@marketplace]>}.
+     *
+     * @param pluginRef plugin reference to remove.
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult pluginRemove(String pluginRef) { return cli.pluginRemove(pluginRef); }
+
+    /**
+     * Runs {@code codex plugin marketplace add <source>}.
+     *
+     * @param source the marketplace source.
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult pluginMarketplaceAdd(String source) { return cli.pluginMarketplaceAdd(source); }
+
+    /**
+     * Runs {@code codex plugin marketplace list}.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult pluginMarketplaceList() { return cli.pluginMarketplaceList(); }
+
+    /**
+     * Runs {@code codex plugin marketplace remove <name>}.
+     *
+     * @param name the marketplace name.
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult pluginMarketplaceRemove(String name) { return cli.pluginMarketplaceRemove(name); }
+
+    /**
+     * Runs {@code codex plugin marketplace upgrade <name>}.
+     *
+     * @param name the marketplace name to upgrade.
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult pluginMarketplaceUpgrade(String name) { return cli.pluginMarketplaceUpgrade(name); }
+
+    /**
+     * Runs {@code codex cloud exec --env <envId> <query>} — submits a cloud task.
+     *
+     * @param envId the cloud environment id.
+     * @param query the task query.
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult cloudExec(String envId, String query) { return cli.cloudExec(envId, query); }
+
+    /**
+     * Runs {@code codex cloud list --env <envId> --json}.
+     *
+     * @param envId the cloud environment id.
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult cloudList(String envId) { return cli.cloudList(envId); }
+
+    /**
+     * Runs {@code codex features enable <feature>}.
+     *
+     * @param feature the feature flag name.
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult featuresEnable(String feature) { return cli.featuresEnable(feature); }
+
+    /**
+     * Runs {@code codex features disable <feature>}.
+     *
+     * @param feature the feature flag name.
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult featuresDisable(String feature) { return cli.featuresDisable(feature); }
+
+    /**
+     * Runs {@code codex features list}.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult featuresList() { return cli.featuresList(); }
+
+    /**
+     * Runs {@code codex review <prompt>} — a custom-instruction review.
+     *
+     * @param prompt the review instruction.
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult reviewPrompt(String prompt) { return cli.reviewPrompt(prompt); }
+
+    /**
      * Runs {@code codex mcp-server}.
      *
      * <p><strong>Deprecated:</strong> the subcommand has been removed from

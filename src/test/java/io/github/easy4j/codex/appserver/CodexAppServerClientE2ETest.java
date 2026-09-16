@@ -22,6 +22,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -106,6 +108,68 @@ class CodexAppServerClientE2ETest {
             assertTrue(methods.contains("thread/resume"));
             assertEquals(1, methods.stream().filter("thread/resume"::equals).count(),
                     "only the repeated session key resumes; a different key starts a fresh thread");
+        }
+    }
+
+    @Test
+    void shouldExposeTurnIdAndOnTurnStarted() throws Exception {
+        try (FakeCodexAppServer server = new FakeCodexAppServer();
+                CodexAppServerClient client = new CodexAppServerClient(configFor(server))) {
+            List<String> startedTurns = new ArrayList<>();
+
+            AppServerTurnResult result = client.runTurn(AppServerTurnRequest.builder()
+                    .prompt("带转向回调")
+                    .onTurnStarted(startedTurns::add)
+                    .build());
+
+            assertEquals("turn_1", result.getTurnId());
+            assertEquals(List.of("turn_1"), startedTurns);
+        }
+    }
+
+    @Test
+    void shouldSupportThreadLifecycleAndTurnControl() throws Exception {
+        try (FakeCodexAppServer server = new FakeCodexAppServer();
+                CodexAppServerClient client = new CodexAppServerClient(configFor(server))) {
+
+            List<AppServerThread> threads = client.listThreads(2);
+            assertEquals(2, threads.size());
+            assertEquals("th_a", threads.get(0).getId());
+            assertEquals("/tmp/a", threads.get(0).getCwd());
+            assertFalse(threads.get(0).isArchived());
+            assertTrue(threads.get(1).isArchived());
+
+            AppServerThread read = client.readThread("th_e2e");
+            assertEquals("th_e2e", read.getId());
+            assertEquals("E2E", read.getName());
+
+            AppServerThread forked = client.forkThread("th_e2e");
+            assertEquals("th_fork", forked.getId());
+
+            client.archiveThread("th_fork");
+            client.unarchiveThread("th_fork");
+            client.deleteThread("th_fork");
+            client.interruptTurn("th_e2e", "turn_1");
+            client.steerTurn("th_e2e", "turn_1", "补充指令");
+
+            String raw = client.execRpc("thread/read",
+                    java.util.Map.of("threadId", "th_e2e"));
+            assertTrue(raw.contains("th_e2e"));
+        }
+    }
+
+    @Test
+    void shouldSendInitializeHandshake() throws Exception {
+        try (FakeCodexAppServer server = new FakeCodexAppServer();
+                CodexAppServerClient client = new CodexAppServerClient(configFor(server))) {
+
+            client.listThreads(2);
+
+            List<String> methods = server.receivedFrames().stream()
+                    .map(this::methodOf)
+                    .toList();
+            assertTrue(methods.contains("initialize"), "generic RPC calls must open with the initialize handshake");
+            assertTrue(methods.contains("initialized"), "initialize must be followed by the initialized notification");
         }
     }
 

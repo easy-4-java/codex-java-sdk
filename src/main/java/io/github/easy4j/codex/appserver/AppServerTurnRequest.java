@@ -51,6 +51,15 @@ public class AppServerTurnRequest {
     private Consumer<String> onDelta;
 
     /**
+     * Optional callback invoked when the server reports {@code turn/started}
+     * with the active turn id. Use it together with
+     * {@link CodexAppServerClient#steerTurn(String, String, String)} or
+     * {@link CodexAppServerClient#interruptTurn(String, String)} to act on a
+     * turn while it is still running.
+     */
+    private Consumer<String> onTurnStarted;
+
+    /**
      * Returns the session key in a comparable form, or {@code null} when unset.
      *
      * @return the trimmed session key, or {@code null} when blank.

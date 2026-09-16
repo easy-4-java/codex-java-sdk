@@ -79,6 +79,7 @@ class CodexAppServerTurn implements WebSocket.Listener {
 
     private volatile WebSocket webSocket;
     private volatile String threadId;
+    private volatile String turnId;
 
     CodexAppServerTurn(AppServerTurnRequest request,
                        CodexAppServerConfig config,
@@ -221,6 +222,7 @@ class CodexAppServerTurn implements WebSocket.Listener {
         String method = node.path("method").asText("");
         JsonNode params = node.path("params");
         switch (method) {
+            case "turn/started" -> onTurnStarted(params);
             case "item/completed" -> onItemCompleted(params);
             case "turn/completed" -> onTurnCompleted(params);
             case "turn/failed" -> completeError(new CodexAppServerException(
@@ -228,6 +230,16 @@ class CodexAppServerTurn implements WebSocket.Listener {
             case "error" -> completeError(new CodexAppServerException(
                     "Codex server error: " + params.toString()));
             default -> log.debug("Ignored Codex notification: method={}", method);
+        }
+    }
+
+    private void onTurnStarted(JsonNode params) {
+        String reported = firstText(params, "turnId", "turn_id");
+        if (hasText(reported)) {
+            turnId = reported;
+            if (Objects.nonNull(request.getOnTurnStarted())) {
+                request.getOnTurnStarted().accept(reported);
+            }
         }
     }
 
@@ -275,6 +287,7 @@ class CodexAppServerTurn implements WebSocket.Listener {
         String finalContent = content.length() > 0 ? content.toString() : params.path("message").asText("");
         future.complete(AppServerTurnResult.builder()
                 .threadId(threadId)
+                .turnId(turnId)
                 .content(finalContent)
                 .finishReason("stop")
                 .build());

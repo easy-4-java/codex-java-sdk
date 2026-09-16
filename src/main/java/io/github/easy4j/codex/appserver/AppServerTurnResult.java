@@ -32,6 +32,9 @@ public class AppServerTurnResult {
     /** Codex thread id the turn ran on; also the value stored in the session mapping. */
     private String threadId;
 
+    /** Turn id reported by {@code turn/started}; usable for steer/interrupt while running. */
+    private String turnId;
+
     /**
      * Concatenated text of every agent-message item completed during the turn;
      * falls back to the {@code message} carried by {@code turn/completed} when
