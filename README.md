@@ -79,6 +79,8 @@ Typical scenarios:
 | Auth / MCP / misc | Active development | `login`, `loginWithApiKey`, `loginWithAccessToken`, `loginDeviceAuth`, `loginStatus`, `logout`, `mcpList` / `mcpAdd` / `mcpGet` / `mcpRemove` / `mcpLogin` / `mcpLogout`, `update`, `features`, `completion`, `app` |
 | Session admin | Active development | `archiveSession`, `unarchiveSession`, `queue`, `deleteSession`, `deleteSessionForce`, `agents`, `migrateRollouts` |
 | App-server WebSocket route | Active development | `CodexAppServerClient.runTurn` / `runTurnAsync`, `thread/start` / `thread/resume`, agent-message deltas, `sessionKey → threadId` LRU (1000) |
+| App-server protocol surface | Active development | `thread/list` / `read` / `fork` / `archive` / `unarchive` / `delete`, `turn/interrupt` / `turn/steer`, `model/list`-style escape hatch `execRpc`; `turnId` exposed via `onTurnStarted` + `AppServerTurnResult` |
+| CLI typed additions | Active development | `debugModels(Bundled)` / `debugPromptInput`, `mcpAddUrl(WithBearer)`, `pluginAdd/List/Remove` + `pluginMarketplace*`, `cloudExec` / `cloudList`, `featuresEnable/Disable/List`, `reviewPrompt` |
 | Config model | Active development | `CodexClientConfig` POJO (plain, Spring-bindable), `CodexAppServerConfig` POJO |
 
 > **Note**: `codex mcp-server` was removed upstream — `CodexClient.mcpServer()`
@@ -295,6 +297,25 @@ try (CodexAppServerClient client = new CodexAppServerClient(config)) {
     System.out.println(result.getThreadId() + " -> " + result.getContent());
 }
 ```
+
+### 8.4 App-server protocol operations
+
+```java
+try (CodexAppServerClient client = new CodexAppServerClient(config)) {
+    List<AppServerThread> threads = client.listThreads(20);
+    AppServerThread forked = client.forkThread("th_123");
+    client.steerTurn("th_123", "turn_9", "也检查一下测试覆盖率");   // redirect a running turn
+    client.interruptTurn("th_123", "turn_9");                      // cancel a running turn
+    client.archiveThread("th_123");
+    String raw = client.execRpc("model/list", Map.of("limit", 10)); // escape hatch
+}
+```
+
+Lifecycle calls run over a short-lived connection with the documented
+tolerant `initialize` handshake; thread state is server-side, so
+`steerTurn` / `interruptTurn` work while the original turn connection is
+still streaming. Running turns expose their id via
+`AppServerTurnRequest.onTurnStarted` and `AppServerTurnResult.getTurnId()`.
 
 The turn maps to `thread/start` (or `thread/resume` when `sessionKey` already
 maps to a thread id) → `turn/start` → `item/completed` (only agent messages

@@ -87,6 +87,10 @@ final class FakeCodexAppServer implements AutoCloseable {
                     // Accept failures on a listening socket mean it was closed; stop quietly.
                     return;
                 }
+            } catch (Exception ex) {
+                // A runtime failure mid-connection must be visible — a silent
+                // thread death here looks exactly like a client-side timeout.
+                ex.printStackTrace();
             }
         }
     }
@@ -149,12 +153,18 @@ final class FakeCodexAppServer implements AutoCloseable {
         JsonNode node = MAPPER.readTree(frame);
         String method = node.path("method").asText("");
         long id = node.path("id").asLong(-1);
+        if ("initialize".equals(method)) {
+            sendText(out, "{\"jsonrpc\":\"2.0\",\"id\":" + id
+                    + ",\"result\":{\"capabilities\":{}}}");
+            return;
+        }
         if ("thread/start".equals(method) || "thread/resume".equals(method)) {
             sendText(out, "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"result\":{\"threadId\":\"th_e2e\"}}");
             return;
         }
         if ("turn/start".equals(method)) {
             sendText(out, "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"result\":{}}");
+            sendText(out, "{\"method\":\"turn/started\",\"params\":{\"threadId\":\"th_e2e\",\"turnId\":\"turn_1\"}}");
             sendText(out, "{\"method\":\"thread/tokenUsage/updated\",\"params\":{\"tokens\":1}}");
             sendText(out, "{\"method\":\"item/completed\",\"params\":"
                     + "{\"item\":{\"type\":\"commandExecution\",\"text\":\"ignored\"}}}");
@@ -164,6 +174,30 @@ final class FakeCodexAppServer implements AutoCloseable {
                     + "{\"item\":{\"itemType\":\"agent_message\",\"content\":\"世界\"}}}");
             sendText(out, "{\"method\":\"turn/completed\",\"params\":"
                     + "{\"threadId\":\"th_e2e\",\"message\":\"fallback-unused\"}}");
+            return;
+        }
+        if ("turn/interrupt".equals(method) || "turn/steer".equals(method)
+                || "thread/archive".equals(method) || "thread/unarchive".equals(method)
+                || "thread/delete".equals(method)) {
+            sendText(out, "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"result\":{}}");
+            return;
+        }
+        if ("thread/list".equals(method)) {
+            sendText(out, "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"result\":{\"threads\":["
+                    + "{\"id\":\"th_a\",\"name\":\"A\",\"cwd\":\"/tmp/a\","
+                    + "\"createdAt\":\"2026-01-01T00:00:00Z\",\"updatedAt\":\"2026-01-02T00:00:00Z\",\"isArchived\":false},"
+                    + "{\"id\":\"th_b\",\"name\":\"B\",\"cwd\":\"/tmp/b\",\"isArchived\":true}"
+                    + "],\"nextCursor\":null}}");
+            return;
+        }
+        if ("thread/read".equals(method)) {
+            sendText(out, "{\"jsonrpc\":\"2.0\",\"id\":" + id
+                    + ",\"result\":{\"thread\":{\"id\":\"th_e2e\",\"name\":\"E2E\",\"cwd\":\"/tmp\",\"isArchived\":false}}}");
+            return;
+        }
+        if ("thread/fork".equals(method)) {
+            sendText(out, "{\"jsonrpc\":\"2.0\",\"id\":" + id
+                    + ",\"result\":{\"thread\":{\"id\":\"th_fork\",\"name\":\"Fork\",\"cwd\":\"/tmp\",\"isArchived\":false},\"model\":\"gpt-5\"}}");
         }
     }
 

@@ -17,6 +17,10 @@ package io.github.easy4j.codex.appserver;
 
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -24,6 +28,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 
@@ -151,6 +156,209 @@ public class CodexAppServerClient implements AutoCloseable {
         return config;
     }
 
+    // ============================================================
+    // app-server protocol — thread lifecycle & turn control
+    // ============================================================
+
+    /**
+     * Lists threads via {@code thread/list}.
+     *
+     * @param limit optional page size ({@code <= 0} omits the field); never {@code null}.
+     * @return thread summaries, newest first per server defaults; never {@code null}.
+     * @since 3.0.0
+     */
+    public List<AppServerThread> listThreads(int limit) {
+        return listThreads(limit, null);
+    }
+
+    /**
+     * Lists threads via {@code thread/list} with pagination.
+     *
+     * @param limit  optional page size ({@code <= 0} omits the field).
+     * @param cursor opaque cursor from a previous call; may be {@code null}.
+     * @return thread summaries; never {@code null}.
+     * @since 3.0.0
+     */
+    public List<AppServerThread> listThreads(int limit, String cursor) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        if (hasText(cursor)) {
+            params.put("cursor", cursor.trim());
+        }
+        if (limit > 0) {
+            params.put("limit", limit);
+        }
+        JsonNode result = execRpcNode("thread/list", params);
+        List<AppServerThread> threads = new ArrayList<>();
+        for (JsonNode node : result.path("threads")) {
+            threads.add(parseThread(node));
+        }
+        return threads;
+    }
+
+    /**
+     * Reads a thread via {@code thread/read} (metadata only, no turn history).
+     *
+     * @param threadId the thread to read.
+     * @return the thread summary; never {@code null}.
+     * @since 3.0.0
+     */
+    public AppServerThread readThread(String threadId) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("threadId", Objects.requireNonNull(threadId, "threadId").trim());
+        JsonNode result = execRpcNode("thread/read", params);
+        return parseThread(result.path("thread"));
+    }
+
+    /**
+     * Reads a thread including its full turn history via
+     * {@code thread/read} with {@code includeTurns=true}.
+     *
+     * @param threadId the thread to read.
+     * @return the raw JSON-RPC {@code result} as a JSON string; never {@code null}.
+     * @since 3.0.0
+     */
+    public String readThreadRaw(String threadId) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("threadId", Objects.requireNonNull(threadId, "threadId").trim());
+        params.put("includeTurns", true);
+        return toJson(execRpcNode("thread/read", params));
+    }
+
+    /**
+     * Forks a thread into a new one via {@code thread/fork}.
+     *
+     * @param threadId the thread to fork.
+     * @return the forked thread summary (its {@code id} is the new thread).
+     * @since 3.0.0
+     */
+    public AppServerThread forkThread(String threadId) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("threadId", Objects.requireNonNull(threadId, "threadId").trim());
+        JsonNode result = execRpcNode("thread/fork", params);
+        return parseThread(result.path("thread"));
+    }
+
+    /** Archives a thread via {@code thread/archive}. */
+    public void archiveThread(String threadId) {
+        simpleThreadCall("thread/archive", threadId);
+    }
+
+    /** Unarchives a thread via {@code thread/unarchive}. */
+    public void unarchiveThread(String threadId) {
+        simpleThreadCall("thread/unarchive", threadId);
+    }
+
+    /**
+     * Permanently deletes a thread and its spawned descendants via
+     * {@code thread/delete}. Ephemeral roots cannot be deleted.
+     */
+    public void deleteThread(String threadId) {
+        simpleThreadCall("thread/delete", threadId);
+    }
+
+    /**
+     * Interrupts a running turn via {@code turn/interrupt}; the turn ends with
+     * status {@code interrupted}. Thread state lives server-side, so the
+     * interrupt may be issued while the original turn connection is still open.
+     *
+     * @param threadId the thread owning the turn.
+     * @param turnId   the turn to interrupt.
+     * @since 3.0.0
+     */
+    public void interruptTurn(String threadId, String turnId) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("threadId", Objects.requireNonNull(threadId, "threadId").trim());
+        params.put("turnId", Objects.requireNonNull(turnId, "turnId").trim());
+        execRpcNode("turn/interrupt", params);
+    }
+
+    /**
+     * Steers a running turn with additional input via {@code turn/steer};
+     * {@code expectedTurnId} must match the currently active turn (see
+     * {@link AppServerTurnRequest#getOnTurnStarted()}).
+     *
+     * @param threadId       the thread owning the turn.
+     * @param expectedTurnId the active turn id.
+     * @param prompt         the steering input.
+     * @since 3.0.0
+     */
+    public void steerTurn(String threadId, String expectedTurnId, String prompt) {
+        Map<String, Object> input = new LinkedHashMap<>();
+        input.put("type", "text");
+        input.put("text", Objects.requireNonNull(prompt, "prompt"));
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("threadId", Objects.requireNonNull(threadId, "threadId").trim());
+        params.put("expectedTurnId", Objects.requireNonNull(expectedTurnId, "expectedTurnId").trim());
+        params.put("input", List.of(input));
+        execRpcNode("turn/steer", params);
+    }
+
+    /**
+     * Executes an arbitrary documented app-server method and returns the raw
+     * JSON-RPC {@code result} as a JSON string — the escape hatch for methods
+     * the SDK does not model yet.
+     *
+     * @param method exact method name (e.g. {@code model/list}).
+     * @param params request parameters; may be empty, never {@code null}.
+     * @return the serialized {@code result}; never {@code null}.
+     * @since 3.0.0
+     */
+    public String execRpc(String method, Map<String, Object> params) {
+        return toJson(execRpcNode(method, params == null ? new LinkedHashMap<>() : params));
+    }
+
+    private JsonNode execRpcNode(String method, Map<String, Object> params) {
+        if (closed) {
+            throw new IllegalStateException("Codex app-server client is closed");
+        }
+        CodexAppServerRpc rpc = new CodexAppServerRpc(config, objectMapper, method, params);
+        return CodexAppServerRpc.join(rpc.start(httpClient()), method);
+    }
+
+    private void simpleThreadCall(String method, String threadId) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("threadId", Objects.requireNonNull(threadId, "threadId").trim());
+        execRpcNode(method, params);
+    }
+
+    private AppServerThread parseThread(JsonNode node) {
+        return AppServerThread.builder()
+                .id(firstText(node, "id"))
+                .name(firstText(node, "name"))
+                .cwd(firstText(node, "cwd"))
+                .createdAt(firstText(node, "createdAt", "created_at"))
+                .updatedAt(firstText(node, "updatedAt", "updated_at"))
+                .archived(firstBool(node, "isArchived", "is_archived", "archived"))
+                .build();
+    }
+
+    private String firstText(JsonNode node, String... fields) {
+        for (String field : fields) {
+            String value = node.path(field).asText(null);
+            if (Objects.nonNull(value) && !value.trim().isEmpty()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private boolean firstBool(JsonNode node, String... fields) {
+        for (String field : fields) {
+            if (node.hasNonNull(field)) {
+                return node.get(field).asBoolean(false);
+            }
+        }
+        return false;
+    }
+
+    private String toJson(JsonNode node) {
+        try {
+            return objectMapper.writeValueAsString(node);
+        } catch (Exception ex) {
+            throw new CodexAppServerException("Codex result serialization failed", ex);
+        }
+    }
+
     /**
      * Closes the client. New turns are rejected afterwards; the executor
      * backing the shared {@link HttpClient} is shut down gracefully. The
@@ -161,6 +369,10 @@ public class CodexAppServerClient implements AutoCloseable {
     public void close() {
         closed = true;
         clientExecutor.shutdown();
+    }
+
+    private static boolean hasText(String value) {
+        return Objects.nonNull(value) && !value.trim().isEmpty();
     }
 
     private HttpClient httpClient() {

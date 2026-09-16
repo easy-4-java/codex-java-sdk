@@ -76,6 +76,8 @@ SDK 覆盖：
 | 认证 / MCP / 其他 | 活跃开发 | `login`、`loginWithApiKey`、`loginWithAccessToken`、`loginDeviceAuth`、`loginStatus`、`logout`、`mcpList` / `mcpAdd` / `mcpGet` / `mcpRemove` / `mcpLogin` / `mcpLogout`、`update`、`features`、`completion`、`app` |
 | 会话管理 | 活跃开发 | `archiveSession`、`unarchiveSession`、`queue`、`deleteSession`、`deleteSessionForce`、`agents`、`migrateRollouts` |
 | App-server WebSocket 路线 | 活跃开发 | `CodexAppServerClient.runTurn` / `runTurnAsync`、`thread/start` / `thread/resume`、agent 消息 delta、`sessionKey → threadId` LRU（1000） |
+| App-server 协议面 | 活跃开发 | `thread/list` / `read` / `fork` / `archive` / `unarchive` / `delete`、`turn/interrupt` / `turn/steer`、逃生通道 `execRpc`；`turnId` 经 `onTurnStarted` 与 `AppServerTurnResult` 暴露 |
+| CLI typed 补齐 | 活跃开发 | `debugModels(Bundled)` / `debugPromptInput`、`mcpAddUrl(WithBearer)`、`pluginAdd/List/Remove` + `pluginMarketplace*`、`cloudExec` / `cloudList`、`featuresEnable/Disable/List`、`reviewPrompt` |
 | 配置模型 | 活跃开发 | `CodexClientConfig` POJO（纯对象，可绑定 Spring 配置）、`CodexAppServerConfig` POJO |
 
 > **注意**：上游已移除 `codex mcp-server` 子命令——`CodexClient.mcpServer()`
@@ -287,6 +289,24 @@ try (CodexAppServerClient client = new CodexAppServerClient(config)) {
     System.out.println(result.getThreadId() + " -> " + result.getContent());
 }
 ```
+
+### 8.4 App-server 协议操作
+
+```java
+try (CodexAppServerClient client = new CodexAppServerClient(config)) {
+    List<AppServerThread> threads = client.listThreads(20);
+    AppServerThread forked = client.forkThread("th_123");
+    client.steerTurn("th_123", "turn_9", "也检查一下测试覆盖率");   // 运行中转向
+    client.interruptTurn("th_123", "turn_9");                      // 运行中打断
+    client.archiveThread("th_123");
+    String raw = client.execRpc("model/list", Map.of("limit", 10)); // 逃生通道
+}
+```
+
+生命周期调用走短连接并带文档规定的容错 `initialize` 握手；线程状态在
+服务端，因此原 turn 连接仍在流式输出时 `steerTurn` / `interruptTurn`
+同样可用。运行中的 turn 经 `AppServerTurnRequest.onTurnStarted` 与
+`AppServerTurnResult.getTurnId()` 暴露其 id。
 
 一个 turn 对应：`thread/start`（`sessionKey` 已有映射时走 `thread/resume`）→
 `turn/start` → `item/completed`（仅 agent 消息对外呈现）→ `turn/completed`。
