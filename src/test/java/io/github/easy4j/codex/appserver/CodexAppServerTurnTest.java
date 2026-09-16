@@ -48,7 +48,11 @@ class CodexAppServerTurnTest {
     }
 
     private JsonNode lastFrame(List<String> sent) {
-        return mapper.readTree(sent.get(sent.size() - 1));
+        try {
+            return mapper.readTree(sent.get(sent.size() - 1));
+        } catch (Exception ex) {
+            throw new IllegalStateException("Invalid captured frame", ex);
+        }
     }
 
     @Test

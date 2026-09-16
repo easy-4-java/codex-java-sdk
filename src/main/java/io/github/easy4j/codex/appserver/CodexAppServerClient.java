@@ -20,6 +20,8 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
@@ -72,6 +74,11 @@ public class CodexAppServerClient implements AutoCloseable {
             JsonMapper.builder().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build();
     private final ThreadMappingCache threadBySession;
     private final Object httpClientLock = new Object();
+    private final ExecutorService clientExecutor = Executors.newCachedThreadPool(r -> {
+        Thread thread = new Thread(r, "codex-app-server-client");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     private volatile HttpClient httpClient;
     private volatile boolean closed;
@@ -145,16 +152,15 @@ public class CodexAppServerClient implements AutoCloseable {
     }
 
     /**
-     * Closes the client. New turns are rejected afterwards; the shared
-     * {@link HttpClient} is shut down once any in-flight turn completes.
+     * Closes the client. New turns are rejected afterwards; the executor
+     * backing the shared {@link HttpClient} is shut down gracefully. The
+     * executor is owned by this client so closing works on every JDK line
+     * ({@code HttpClient.close()} only exists since JDK 21).
      */
     @Override
     public void close() {
         closed = true;
-        HttpClient client = httpClient;
-        if (Objects.nonNull(client)) {
-            client.close();
-        }
+        clientExecutor.shutdown();
     }
 
     private HttpClient httpClient() {
@@ -164,6 +170,7 @@ public class CodexAppServerClient implements AutoCloseable {
                 if (Objects.isNull(httpClient)) {
                     httpClient = HttpClient.newBuilder()
                             .connectTimeout(Duration.ofMillis(config.getConnectTimeoutMillis()))
+                            .executor(clientExecutor)
                             .build();
                 }
                 client = httpClient;

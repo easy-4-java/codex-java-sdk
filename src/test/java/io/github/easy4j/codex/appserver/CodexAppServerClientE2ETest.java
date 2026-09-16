@@ -123,8 +123,12 @@ class CodexAppServerClientE2ETest {
     }
 
     private String methodOf(String frame) {
-        JsonNode node = mapper.readTree(frame);
-        return node.path("method").asText("");
+        try {
+            JsonNode node = mapper.readTree(frame);
+            return node.path("method").asText("");
+        } catch (Exception ex) {
+            throw new IllegalStateException("Invalid JSON-RPC frame: " + frame, ex);
+        }
     }
 
     private List<String> methodsOf(FakeCodexAppServer server) {
