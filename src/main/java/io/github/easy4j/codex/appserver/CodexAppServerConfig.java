@@ -56,4 +56,19 @@ public class CodexAppServerConfig {
      * degrade to starting a fresh thread. Defaults to {@code 1000}.
      */
     private int maxSessionMappings = 1000;
+
+    /**
+     * Hard cap in characters for the frame accumulation buffer. A server frame
+     * exceeding it fails the turn with {@link CodexAppServerException}. Values
+     * {@code <= 0} mean unbounded. Defaults to 1&nbsp;MiB characters.
+     */
+    private int maxFrameChars = 1_048_576;
+
+    /**
+     * Hard cap in characters for the agent-message content accumulated per
+     * turn; excess item text is truncated (with a warning) rather than failing
+     * the turn. Values {@code <= 0} mean unbounded. Defaults to 1&nbsp;MiB
+     * characters.
+     */
+    private int maxContentChars = 1_048_576;
 }

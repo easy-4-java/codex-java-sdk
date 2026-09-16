@@ -261,4 +261,58 @@ class CodexAppServerTurnTest {
         assertTrue(turn.future().isDone());
         assertEquals("stop", turn.future().get(1, TimeUnit.SECONDS).getFinishReason());
     }
+
+    @Test
+    void shouldFailTurnWhenFrameExceedsCap() {
+        CodexAppServerConfig config = new CodexAppServerConfig();
+        config.setMaxFrameChars(8);
+        CodexAppServerTurn turn = new CodexAppServerTurn(
+                AppServerTurnRequest.builder().prompt("hi").build(), config, mapper, new ThreadMappingCache(10), null);
+
+        turn.onText(null, "way-too-long-frame-data", false);
+
+        assertTrue(turn.future().isCompletedExceptionally());
+        CompletionException ex = assertThrows(CompletionException.class, () -> turn.future().join());
+        CodexAppServerException cause = assertInstanceOf(CodexAppServerException.class, ex.getCause());
+        assertTrue(cause.getMessage().contains("maxFrameChars"));
+    }
+
+    @Test
+    void shouldTruncateContentAtCapWithoutFailingTurn() {
+        CodexAppServerConfig config = new CodexAppServerConfig();
+        config.setMaxContentChars(10);
+        List<String> deltas = new ArrayList<>();
+        CodexAppServerTurn turn = new CodexAppServerTurn(
+                AppServerTurnRequest.builder().prompt("hi").onDelta(deltas::add).build(),
+                config, mapper, new ThreadMappingCache(10), null);
+
+        turn.begin();
+        turn.handleFrame("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"threadId\":\"th_1\"}}");
+        turn.handleFrame("{\"method\":\"item/completed\",\"params\":{\"item\":{\"type\":\"agentMessage\",\"text\":\"12345\"}}}");
+        turn.handleFrame("{\"method\":\"item/completed\",\"params\":{\"item\":{\"type\":\"agentMessage\",\"text\":\"67890\"}}}");
+        turn.handleFrame("{\"method\":\"item/completed\",\"params\":{\"item\":{\"type\":\"agentMessage\",\"text\":\"ABCDE\"}}}");
+        turn.handleFrame("{\"method\":\"turn/completed\",\"params\":{}}");
+
+        AppServerTurnResult result = turn.future().join();
+        assertEquals("1234567890", result.getContent());
+        assertEquals(List.of("12345", "67890"), deltas, "truncated-to-empty text must not emit a delta");
+        assertEquals("stop", result.getFinishReason());
+    }
+
+    @Test
+    void shouldTreatNonPositiveCapsAsUnbounded() {
+        CodexAppServerConfig config = new CodexAppServerConfig();
+        config.setMaxFrameChars(0);
+        config.setMaxContentChars(-1);
+        CodexAppServerTurn turn = new CodexAppServerTurn(
+                AppServerTurnRequest.builder().prompt("hi").build(), config, mapper, new ThreadMappingCache(10), null);
+
+        turn.begin();
+        turn.handleFrame("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"threadId\":\"th_1\"}}");
+        turn.onText(null, "x".repeat(4096), false);
+        turn.handleFrame("{\"method\":\"turn/completed\",\"params\":{}}");
+
+        assertTrue(turn.future().isDone());
+        assertFalse(turn.future().isCompletedExceptionally());
+    }
 }

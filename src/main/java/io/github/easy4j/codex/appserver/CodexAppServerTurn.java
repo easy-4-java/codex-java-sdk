@@ -101,12 +101,16 @@ class CodexAppServerTurn implements WebSocket.Listener {
      */
     CompletableFuture<AppServerTurnResult> start() {
         Objects.requireNonNull(httpClient, "httpClient");
+        String url = toWebSocketUrl(config.getBaseUrl());
+        if (hasText(config.getToken()) && url.startsWith("ws://")) {
+            log.warn("Codex app-server token is sent over an unencrypted ws:// connection; prefer wss:// in production");
+        }
         WebSocket.Builder builder = httpClient.newWebSocketBuilder();
         builder.connectTimeout(Duration.ofMillis(config.getConnectTimeoutMillis()));
         if (hasText(config.getToken())) {
             builder.header("Authorization", "Bearer " + config.getToken().trim());
         }
-        builder.buildAsync(URI.create(toWebSocketUrl(config.getBaseUrl())), this)
+        builder.buildAsync(URI.create(url), this)
                 .whenComplete((socket, error) -> {
                     if (Objects.nonNull(error)) {
                         completeError(new CodexAppServerException("Codex WebSocket connection failed", error));
@@ -158,6 +162,11 @@ class CodexAppServerTurn implements WebSocket.Listener {
 
     @Override
     public CompletionStage<?> onText(WebSocket socket, CharSequence data, boolean last) {
+        if (frameBuffer.length() + data.length() > effectiveMaxFrameChars()) {
+            completeError(new CodexAppServerException(
+                    "Codex frame buffer exceeded maxFrameChars=" + config.getMaxFrameChars()));
+            return null;
+        }
         frameBuffer.append(data);
         if (last) {
             String frame = frameBuffer.toString();
@@ -233,10 +242,32 @@ class CodexAppServerTurn implements WebSocket.Listener {
         if (!hasText(text)) {
             return;
         }
-        content.append(text);
-        if (Objects.nonNull(request.getOnDelta())) {
-            request.getOnDelta().accept(text);
+        String applied = truncateToContentCap(text);
+        content.append(applied);
+        if (!applied.isEmpty() && Objects.nonNull(request.getOnDelta())) {
+            request.getOnDelta().accept(applied);
         }
+    }
+
+    /** Applies the {@code maxContentChars} hard cap; excess text is dropped with a single warning. */
+    private String truncateToContentCap(String text) {
+        int cap = effectiveMaxContentChars();
+        if (content.length() >= cap) {
+            return "";
+        }
+        if (content.length() + text.length() > cap) {
+            log.warn("Codex turn content truncated at maxContentChars={}", config.getMaxContentChars());
+            return text.substring(0, cap - content.length());
+        }
+        return text;
+    }
+
+    private int effectiveMaxFrameChars() {
+        return config.getMaxFrameChars() <= 0 ? Integer.MAX_VALUE : config.getMaxFrameChars();
+    }
+
+    private int effectiveMaxContentChars() {
+        return config.getMaxContentChars() <= 0 ? Integer.MAX_VALUE : config.getMaxContentChars();
     }
 
     private void onTurnCompleted(JsonNode params) {

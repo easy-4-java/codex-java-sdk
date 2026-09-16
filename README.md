@@ -228,6 +228,13 @@ There is no configuration file of its own. Key fields:
 
 ### 7.1 `CodexAppServerConfig` (app-server WebSocket route)
 
+> **Upgrade notes (3.0.x.x.20260630+)**: CLI-route arguments are now passed
+> to the child process raw — multi-word prompts no longer arrive at `codex`
+> wrapped in embedded literal quotes. Non-zero CLI exits now preserve the real
+> exit code and both captured streams instead of collapsing to `exitCode=-1`
+> with empty output. A bearer token over a plaintext `ws://` connection logs a
+> warning; prefer `wss://`.
+
 Plain POJO (Spring `@ConfigurationProperties`-bindable). Field names mirror the
 commonly used `CodexEndpoint` binding:
 
@@ -238,6 +245,8 @@ commonly used `CodexEndpoint` binding:
 | `connectTimeoutMillis` | int | `5000` | TCP/TLS + WebSocket handshake timeout |
 | `readTimeoutMillis` | int | `120000` | Upper bound for a whole turn (connect → `turn/completed`) |
 | `maxSessionMappings` | int | `1000` | Bound of the `sessionKey → threadId` LRU; evicted sessions start fresh threads |
+| `maxFrameChars` | int | `1048576` | Frame accumulation hard cap; oversized server frames fail the turn (`<= 0` = unbounded) |
+| `maxContentChars` | int | `1048576` | Per-turn agent-message content cap; excess is truncated with a warning (`<= 0` = unbounded) |
 
 ## 8. Core Usage / API
 
