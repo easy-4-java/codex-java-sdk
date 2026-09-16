@@ -18,6 +18,7 @@ package io.github.easy4j.codex.cli;
 import io.github.easy4j.codex.CodexClientConfig;
 import org.apache.commons.exec.CommandLine;
 import org.apache.commons.exec.DefaultExecutor;
+import org.apache.commons.exec.ExecuteException;
 import org.apache.commons.exec.ExecuteWatchdog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,6 +80,10 @@ public class CodexCliExecutor {
      *   <li>Process timeout &mdash; {@link CodexCliResult#isTimeout()} returns
      *       {@code true}; exit code is {@code -1}; stderr contains the timeout
      *       notice.</li>
+     *   <li>Non-zero process exit &mdash; the real exit code is preserved in
+     *       {@link CodexCliResult#getExitCode()}, and both captured streams are
+     *       returned as-is ({@link CodexCliResult#isSuccess()} is simply
+     *       {@code exitCode == 0}).</li>
      *   <li>IOException (missing executable, permission denied, etc.) &mdash;
      *       the {@link IOException#getMessage()} is captured in
      *       {@link CodexCliResult#getStderr()} and the exit code is {@code -1}.</li>
@@ -113,7 +118,11 @@ public class CodexCliExecutor {
         CommandLine cmd = CommandLine.parse(config.getLocalExecutable());
         for (String arg : args) {
             if (arg != null) {
-                cmd.addArgument(arg);
+                // handleQuoting=false: the child is spawned via exec(argv), not
+                // a shell — commons-exec's default quoting would embed literal
+                // double quotes inside arguments containing spaces (prompts,
+                // config overrides, paths), corrupting them on arrival.
+                cmd.addArgument(arg, false);
             }
         }
 
@@ -131,6 +140,7 @@ public class CodexCliExecutor {
         ExecuteWatchdog watchdog = new ExecuteWatchdog(timeoutMs);
         executor.setWatchdog(watchdog);
 
+        long startNanos = System.nanoTime();
         try {
             int exitCode = executor.execute(cmd);
             String out = stdout.toString().trim();
@@ -140,6 +150,23 @@ public class CodexCliExecutor {
                 return new CodexCliResult(-1, out, "codex CLI timed out after " + timeoutMs + " ms\n" + err);
             }
             return new CodexCliResult(exitCode, out, err);
+        } catch (ExecuteException e) {
+            // commons-exec throws ExecuteException for EVERY non-zero exit
+            // (and for watchdog kills). The stream pumps are joined before it
+            // is thrown, so both buffers are complete — surface them together
+            // with the real exit code instead of discarding the output. The
+            // deadline check makes the timeout verdict race-free even when
+            // {@code watchdog.killedProcess()} has not observed the kill yet.
+            String out = stdout.toString().trim();
+            String err = stderr.toString().trim();
+            boolean timedOut = watchdog.killedProcess()
+                    || System.nanoTime() - startNanos >= timeoutMs * 1_000_000L;
+            if (timedOut) {
+                return new CodexCliResult(-1, out, "codex CLI timed out after " + timeoutMs + " ms\n" + err);
+            }
+            log.debug("codex CLI failed: exitCode={}, stdout.len={}, stderr.len={}",
+                    e.getExitValue(), out.length(), err.length());
+            return new CodexCliResult(e.getExitValue(), out, err);
         } catch (IOException e) {
             return new CodexCliResult(-1, "", e.getMessage());
         }
