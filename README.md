@@ -98,6 +98,11 @@ Typical scenarios:
 | Codex CLI | Local route: `codex` must be installed and available (`localExecutable` configures the path) |
 | Codex app-server | WebSocket route only: a reachable app-server (`baseUrl` accepts ws/wss/http/https) |
 
+> **Note**: the app-server WebSocket route uses the JDK built-in
+> `java.net.http.HttpClient` (JDK 11+). It is available on the `feature/2.0.x`
+> and `feature/3.0.x` lines; the `feature/1.0.x` (JDK 8) line ships the CLI
+> route only.
+
 Version lines:
 
 | Branch | JDK | Version |

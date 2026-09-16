@@ -94,6 +94,10 @@ SDK 覆盖：
 | Codex CLI | 本地路线：必须安装且可执行（`localExecutable` 可配置路径） |
 | Codex app-server | 仅 WebSocket 路线：需要可达的 app-server（`baseUrl` 支持 ws/wss/http/https） |
 
+> **注意**：app-server WebSocket 路线使用 JDK 内置 `java.net.http.HttpClient`
+> （JDK 11+），仅在 `feature/2.0.x` 与 `feature/3.0.x` 版本线提供；
+> `feature/1.0.x`（JDK 8）线仅包含 CLI 路线。
+
 版本线：
 
 | 分支 | JDK | 版本 |
