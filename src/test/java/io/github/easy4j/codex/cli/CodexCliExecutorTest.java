@@ -102,6 +102,19 @@ class CodexCliExecutorTest {
     }
 
     @Test
+    void shouldDecodeChildOutputAsUtf8() {
+        // The CLIs emit UTF-8 regardless of platform; decoding with the
+        // platform default charset would mojibake on GBK-default Windows.
+        // You = \344\275\240, Hao = \345\245\275 (POSIX printf octal escapes).
+        CodexCliExecutor executor = new CodexCliExecutor(configFor("/bin/sh"));
+
+        CodexCliResult result = executor.executeWithStdin(null, "-c", "printf '\\344\\275\\240\\345\\245\\275'");
+
+        assertEquals("你好", result.getStdout(),
+                "child output must be decoded as UTF-8, not the platform default charset");
+    }
+
+    @Test
     void shouldIgnoreNullArguments() {
         CodexCliExecutor executor = new CodexCliExecutor(configFor("/bin/echo"));
 
