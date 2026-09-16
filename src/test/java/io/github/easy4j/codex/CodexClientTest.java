@@ -466,7 +466,9 @@ class CodexClientTest {
 
     @Test
     void shouldDelegateLoginVariants() {
-        assertTrue(echoClient().loginWithApiKey("sk-test").getStdout().contains("--with-api-key"));
+        CodexCliResult apiKeyLogin = echoClient().loginWithApiKey("sk-test");
+        assertTrue(apiKeyLogin.getStdout().contains("--with-api-key"),
+                "exit=" + apiKeyLogin.getExitCode() + " stdout=[" + apiKeyLogin.getStdout() + "] stderr=[" + apiKeyLogin.getStderr() + "]");
         assertTrue(echoClient().loginWithAccessToken("tok-1").getStdout().contains("--with-access-token"));
         assertTrue(echoClient().loginDeviceAuth().getStdout().contains("--device-auth"));
         assertTrue(echoClient().loginStatus().getStdout().contains("status"));

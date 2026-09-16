@@ -344,15 +344,19 @@ class CodexCliTest {
     @Test
     void shouldDelegateLoginWithApiKey() {
         CodexCliResult result = echoCli().loginWithApiKey("sk-test");
-        assertTrue(result.getStdout().contains("login"));
-        assertTrue(result.getStdout().contains("--with-api-key"));
+        assertTrue(result.getStdout().contains("login"),
+                "exit=" + result.getExitCode() + " stdout=[" + result.getStdout() + "] stderr=[" + result.getStderr() + "]");
+        assertTrue(result.getStdout().contains("--with-api-key"),
+                "stdout=[" + result.getStdout() + "]");
     }
 
     @Test
     void shouldDelegateLoginWithAccessToken() {
         CodexCliResult result = echoCli().loginWithAccessToken("tok-123");
-        assertTrue(result.getStdout().contains("login"));
-        assertTrue(result.getStdout().contains("--with-access-token"));
+        assertTrue(result.getStdout().contains("login"),
+                "exit=" + result.getExitCode() + " stdout=[" + result.getStdout() + "] stderr=[" + result.getStderr() + "]");
+        assertTrue(result.getStdout().contains("--with-access-token"),
+                "stdout=[" + result.getStdout() + "]");
     }
 
     @Test
