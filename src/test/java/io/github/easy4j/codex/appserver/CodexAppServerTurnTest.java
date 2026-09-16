@@ -1,0 +1,260 @@
+/*
+ * Copyright (c) 2018-present, easy-4-java (https://github.com/easy-4-java).
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.github.easy4j.codex.appserver;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.TimeUnit;
+
+import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+
+/**
+ * Contract tests for {@link CodexAppServerTurn} driven without a socket:
+ * outgoing RPC payloads are inspected through {@code sentMessages} and
+ * inbound frames are fed straight into {@code handleFrame}, mirroring the
+ * integration contract of the app-server protocol.
+ *
+ * @since 3.0.0
+ */
+class CodexAppServerTurnTest {
+
+    private final ObjectMapper mapper = new JsonMapper();
+
+    private CodexAppServerTurn newTurn(AppServerTurnRequest request, ThreadMappingCache cache) {
+        return new CodexAppServerTurn(request, new CodexAppServerConfig(), mapper, cache, null);
+    }
+
+    private JsonNode lastFrame(List<String> sent) {
+        return mapper.readTree(sent.get(sent.size() - 1));
+    }
+
+    @Test
+    void shouldMapWebSocketUrls() {
+        assertEquals("ws://host:8081", CodexAppServerTurn.toWebSocketUrl("ws://host:8081"));
+        assertEquals("wss://host:8081", CodexAppServerTurn.toWebSocketUrl("wss://host:8081"));
+        assertEquals("ws://host:8081", CodexAppServerTurn.toWebSocketUrl("http://host:8081"));
+        assertEquals("wss://host:8081", CodexAppServerTurn.toWebSocketUrl("https://host:8081"));
+        assertEquals("ws://host:8081", CodexAppServerTurn.toWebSocketUrl("http://host:8081/"));
+        assertEquals("ws://host:8081", CodexAppServerTurn.toWebSocketUrl("  http://host:8081/// "));
+        assertThrows(IllegalArgumentException.class, () -> CodexAppServerTurn.toWebSocketUrl(null));
+        assertThrows(IllegalArgumentException.class, () -> CodexAppServerTurn.toWebSocketUrl("  "));
+        assertThrows(IllegalArgumentException.class, () -> CodexAppServerTurn.toWebSocketUrl("ftp://host:8081"));
+    }
+
+    @Test
+    void shouldStartWithThreadStartWhenNoSessionKey() {
+        CodexAppServerTurn turn = newTurn(AppServerTurnRequest.builder().prompt("hi").build(),
+                new ThreadMappingCache(10));
+
+        turn.begin();
+
+        JsonNode frame = lastFrame(turn.sentMessages());
+        assertEquals("2.0", frame.path("jsonrpc").asText());
+        assertEquals(1L, frame.path("id").asLong());
+        assertEquals("thread/start", frame.path("method").asText());
+        assertTrue(frame.path("params").isEmpty());
+    }
+
+    @Test
+    void shouldResumeThreadWhenSessionKeyMapped() {
+        ThreadMappingCache cache = new ThreadMappingCache(10);
+        cache.put("chat-1", "th_cached");
+        CodexAppServerTurn turn = newTurn(
+                AppServerTurnRequest.builder().prompt("hi").sessionKey(" chat-1 ").build(), cache);
+
+        turn.begin();
+
+        JsonNode frame = lastFrame(turn.sentMessages());
+        assertEquals("thread/resume", frame.path("method").asText());
+        assertEquals("th_cached", frame.path("params").path("threadId").asText());
+    }
+
+    @Test
+    void shouldBuildTurnStartWithTextInputItem() {
+        CodexAppServerTurn turn = newTurn(AppServerTurnRequest.builder().prompt("Fix it").build(),
+                new ThreadMappingCache(10));
+
+        turn.begin();
+        turn.handleFrame("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"threadId\":\"th_9\"}}");
+
+        JsonNode frame = lastFrame(turn.sentMessages());
+        assertEquals("turn/start", frame.path("method").asText());
+        assertEquals("th_9", frame.path("params").path("threadId").asText());
+        JsonNode input = frame.path("params").path("input").get(0);
+        assertEquals("text", input.path("type").asText());
+        assertEquals("Fix it", input.path("text").asText());
+    }
+
+    @Test
+    void shouldFailWhenThreadStartResultHasNoThreadId() {
+        CodexAppServerTurn turn = newTurn(AppServerTurnRequest.builder().prompt("hi").build(),
+                new ThreadMappingCache(10));
+
+        turn.begin();
+        turn.handleFrame("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}");
+
+        assertTrue(turn.future().isCompletedExceptionally());
+        CompletionException ex = assertThrows(CompletionException.class, () -> turn.future().join());
+        assertInstanceOf(CodexAppServerException.class, ex.getCause());
+    }
+
+    @Test
+    void shouldFailWhenRpcRespondsWithError() {
+        CodexAppServerTurn turn = newTurn(AppServerTurnRequest.builder().prompt("hi").build(),
+                new ThreadMappingCache(10));
+
+        turn.begin();
+        turn.handleFrame("{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-1,\"message\":\"boom\"}}");
+
+        assertTrue(turn.future().isCompletedExceptionally());
+        CompletionException ex = assertThrows(CompletionException.class, () -> turn.future().join());
+        assertInstanceOf(CodexAppServerException.class, ex.getCause());
+    }
+
+    @Test
+    void shouldIgnoreUnknownRpcResponses() {
+        CodexAppServerTurn turn = newTurn(AppServerTurnRequest.builder().prompt("hi").build(),
+                new ThreadMappingCache(10));
+
+        turn.handleFrame("{\"jsonrpc\":\"2.0\",\"id\":99,\"result\":{}}");
+
+        assertFalse(turn.future().isDone());
+    }
+
+    @Test
+    void shouldCollectAgentMessageItemsAndIgnoreOthers() {
+        List<String> deltas = new ArrayList<>();
+        CodexAppServerTurn turn = newTurn(AppServerTurnRequest.builder().prompt("hi").onDelta(deltas::add).build(),
+                new ThreadMappingCache(10));
+
+        turn.begin();
+        turn.handleFrame("{\"method\":\"item/completed\",\"params\":{\"item\":{\"type\":\"commandExecution\",\"text\":\"rm\"}}}");
+        turn.handleFrame("{\"method\":\"item/completed\",\"params\":{\"item\":{\"type\":\"agentMessage\",\"text\":\"你好\"}}}");
+        turn.handleFrame("{\"method\":\"item/completed\",\"params\":{\"item\":{\"itemType\":\"agent_message\",\"content\":\"世界\"}}}");
+        turn.handleFrame("{\"method\":\"item/completed\",\"params\":{\"item\":{\"type\":\"agentMessage\"}}}");
+        turn.handleFrame("{\"method\":\"turn/completed\",\"params\":{\"message\":\"fallback\"}}");
+
+        assertEquals(List.of("你好", "世界"), deltas);
+        assertEquals("你好世界", turn.future().join().getContent());
+        assertEquals("stop", turn.future().join().getFinishReason());
+    }
+
+    @Test
+    void shouldFallBackToTurnCompletedMessageWithoutItems() {
+        CodexAppServerTurn turn = newTurn(AppServerTurnRequest.builder().prompt("hi").build(),
+                new ThreadMappingCache(10));
+
+        turn.begin();
+        turn.handleFrame("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"threadId\":\"th_1\"}}");
+        turn.handleFrame("{\"method\":\"turn/completed\",\"params\":{\"message\":\"fallback text\"}}");
+
+        assertEquals("fallback text", turn.future().join().getContent());
+    }
+
+    @Test
+    void shouldRememberThreadMappingOnTurnCompleted() {
+        ThreadMappingCache cache = new ThreadMappingCache(10);
+        CodexAppServerTurn turn = newTurn(
+                AppServerTurnRequest.builder().prompt("hi").sessionKey("chat-7").build(), cache);
+
+        turn.begin();
+        turn.handleFrame("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"threadId\":\"th_7\"}}");
+        turn.handleFrame("{\"method\":\"turn/completed\",\"params\":{}}");
+
+        assertEquals("th_7", turn.future().join().getThreadId());
+        assertEquals("th_7", cache.get("chat-7"));
+    }
+
+    @Test
+    void shouldNotRememberMappingWithoutSessionKey() {
+        ThreadMappingCache cache = new ThreadMappingCache(10);
+        CodexAppServerTurn turn = newTurn(AppServerTurnRequest.builder().prompt("hi").build(), cache);
+
+        turn.begin();
+        turn.handleFrame("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"threadId\":\"th_1\"}}");
+        turn.handleFrame("{\"method\":\"turn/completed\",\"params\":{}}");
+
+        assertEquals(0, cache.size());
+    }
+
+    @Test
+    void shouldFailOnTurnFailedNotification() {
+        CodexAppServerTurn turn = newTurn(AppServerTurnRequest.builder().prompt("hi").build(),
+                new ThreadMappingCache(10));
+
+        turn.handleFrame("{\"method\":\"turn/failed\",\"params\":{\"message\":\"model down\"}}");
+
+        assertTrue(turn.future().isCompletedExceptionally());
+        CompletionException ex = assertThrows(CompletionException.class, () -> turn.future().join());
+        CodexAppServerException cause = assertInstanceOf(CodexAppServerException.class, ex.getCause());
+        assertTrue(cause.getMessage().contains("model down"));
+    }
+
+    @Test
+    void shouldFailOnErrorNotification() {
+        CodexAppServerTurn turn = newTurn(AppServerTurnRequest.builder().prompt("hi").build(),
+                new ThreadMappingCache(10));
+
+        turn.handleFrame("{\"method\":\"error\",\"params\":{\"code\":500}}");
+
+        assertTrue(turn.future().isCompletedExceptionally());
+    }
+
+    @Test
+    void shouldIgnoreUnknownNotificationsAndInvalidFrames() {
+        CodexAppServerTurn turn = newTurn(AppServerTurnRequest.builder().prompt("hi").build(),
+                new ThreadMappingCache(10));
+
+        turn.handleFrame("{\"method\":\"thread/tokenUsage/updated\",\"params\":{}}");
+        turn.handleFrame("not json at all");
+
+        assertFalse(turn.future().isDone());
+    }
+
+    @Test
+    void shouldFailWhenSocketClosesBeforeCompletion() {
+        CodexAppServerTurn turn = newTurn(AppServerTurnRequest.builder().prompt("hi").build(),
+                new ThreadMappingCache(10));
+
+        turn.onClose(null, 1000, "bye");
+
+        assertTrue(turn.future().isCompletedExceptionally());
+    }
+
+    @Test
+    void shouldCompleteWithoutErrorAfterTurnCompletedWhenSocketClosesLate() throws Exception {
+        CodexAppServerTurn turn = newTurn(AppServerTurnRequest.builder().prompt("hi").build(),
+                new ThreadMappingCache(10));
+
+        turn.begin();
+        turn.handleFrame("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"threadId\":\"th_1\"}}");
+        turn.handleFrame("{\"method\":\"turn/completed\",\"params\":{}}");
+        turn.onClose(null, 1000, "bye");
+
+        assertTrue(turn.future().isDone());
+        assertEquals("stop", turn.future().get(1, TimeUnit.SECONDS).getFinishReason());
+    }
+}

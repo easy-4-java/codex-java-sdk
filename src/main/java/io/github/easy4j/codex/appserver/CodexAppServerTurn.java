@@ -1,0 +1,399 @@
+/*
+ * Copyright (c) 2018-present, easy-4-java (https://github.com/easy-4-java).
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.github.easy4j.codex.appserver;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.WebSocket;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+
+import lombok.extern.slf4j.Slf4j;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+
+/**
+ * One JSON-RPC turn against the Codex app-server, driven over a WebSocket.
+ *
+ * <p>The message sequence is {@code thread/start} (or {@code thread/resume}
+ * when the request's session key already maps to a thread id) &rarr;
+ * {@code turn/start} with a single text input item &rarr; consumption of
+ * {@code item/completed} notifications (only agent messages surface as
+ * deltas) &rarr; completion on {@code turn/completed}. Unknown notifications
+ * are logged at debug level and never interrupt the turn.</p>
+ *
+ * <p>Each turn owns its WebSocket connection; a shared {@link HttpClient} and
+ * a shared {@link ThreadMappingCache} are supplied by the owning
+ * {@link CodexAppServerClient}, which keeps the class safe to run for
+ * concurrent turns.</p>
+ *
+ * @author <a href="https://github.com/loong10k">Loong Wan</a>
+ * @since 3.0.0
+ * @see CodexAppServerClient
+ */
+@Slf4j
+class CodexAppServerTurn implements WebSocket.Listener {
+
+    /**
+     * Accepted identifiers of agent-message items; the Codex protocol has
+     * drifted between camelCase and snake_case across revisions.
+     */
+    private static final List<String> AGENT_MESSAGE_TYPES =
+            List.of("agentMessage", "agent_message", "message");
+
+    private final AppServerTurnRequest request;
+    private final CodexAppServerConfig config;
+    private final ObjectMapper objectMapper;
+    private final ThreadMappingCache threadBySession;
+    private final HttpClient httpClient;
+    private final CompletableFuture<AppServerTurnResult> future = new CompletableFuture<>();
+    private final Map<Long, CompletableFuture<JsonNode>> pendingRpcs = new ConcurrentHashMap<>();
+    private final AtomicLong rpcIds = new AtomicLong();
+    private final StringBuilder content = new StringBuilder();
+    private final StringBuilder frameBuffer = new StringBuilder();
+    /** Records outgoing RPC payloads; without a socket they are only recorded, for contract tests. */
+    private final List<String> sentMessages = new ArrayList<>();
+
+    private volatile WebSocket webSocket;
+    private volatile String threadId;
+
+    CodexAppServerTurn(AppServerTurnRequest request,
+                       CodexAppServerConfig config,
+                       ObjectMapper objectMapper,
+                       ThreadMappingCache threadBySession,
+                       HttpClient httpClient) {
+        this.request = Objects.requireNonNull(request, "request");
+        this.config = Objects.requireNonNull(config, "config");
+        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
+        this.threadBySession = Objects.requireNonNull(threadBySession, "threadBySession");
+        this.httpClient = httpClient;
+    }
+
+    /**
+     * Opens the WebSocket, mounts the read-timeout guard and starts the RPC
+     * sequence once the handshake completes.
+     *
+     * @return the future completed with the turn result, or completed
+     *         exceptionally with a {@link CodexAppServerException}.
+     */
+    CompletableFuture<AppServerTurnResult> start() {
+        Objects.requireNonNull(httpClient, "httpClient");
+        WebSocket.Builder builder = httpClient.newWebSocketBuilder();
+        builder.connectTimeout(Duration.ofMillis(config.getConnectTimeoutMillis()));
+        if (hasText(config.getToken())) {
+            builder.header("Authorization", "Bearer " + config.getToken().trim());
+        }
+        builder.buildAsync(URI.create(toWebSocketUrl(config.getBaseUrl())), this)
+                .whenComplete((socket, error) -> {
+                    if (Objects.nonNull(error)) {
+                        completeError(new CodexAppServerException("Codex WebSocket connection failed", error));
+                    }
+                });
+        future.orTimeout(config.getReadTimeoutMillis(), TimeUnit.MILLISECONDS)
+                .whenComplete((result, error) -> {
+                    if (Objects.nonNull(error)) {
+                        log.warn("Codex turn timed out after {} ms", config.getReadTimeoutMillis());
+                    }
+                    abort();
+                });
+        return future;
+    }
+
+    @Override
+    public void onOpen(WebSocket socket) {
+        this.webSocket = socket;
+        socket.request(1);
+        begin();
+    }
+
+    /**
+     * Sends the first RPC: {@code thread/resume} when the session key already
+     * maps to a thread id, {@code thread/start} otherwise.
+     *
+     * <p>Split from {@link #onOpen(WebSocket)} so contract tests can drive the
+     * turn without a socket; requests are only recorded in
+     * {@link #sentMessages} when no socket is attached.</p>
+     */
+    void begin() {
+        String sessionKey = request.normalizedSessionKey();
+        String previousThreadId = Objects.isNull(sessionKey) ? null : threadBySession.get(sessionKey);
+        boolean resume = hasText(previousThreadId);
+        CompletableFuture<JsonNode> rpc = newRpc(resume ? "thread/resume" : "thread/start",
+                buildThreadStartParams(resume ? previousThreadId : null));
+        rpc.thenAccept(result -> {
+            threadId = extractThreadId(result);
+            if (!hasText(threadId)) {
+                completeError(new CodexAppServerException("Codex thread/start returned no threadId"));
+                return;
+            }
+            newRpc("turn/start", buildTurnStartParams(threadId));
+        }).exceptionally(error -> {
+            completeError(unwrap(error));
+            return null;
+        });
+    }
+
+    @Override
+    public CompletionStage<?> onText(WebSocket socket, CharSequence data, boolean last) {
+        frameBuffer.append(data);
+        if (last) {
+            String frame = frameBuffer.toString();
+            frameBuffer.setLength(0);
+            handleFrame(frame);
+            socket.request(1);
+        }
+        return null;
+    }
+
+    @Override
+    public void onError(WebSocket socket, Throwable error) {
+        completeError(new CodexAppServerException("Codex WebSocket error", error));
+    }
+
+    @Override
+    public CompletionStage<?> onClose(WebSocket socket, int statusCode, String reason) {
+        if (!future.isDone()) {
+            completeError(new CodexAppServerException(
+                    "Codex WebSocket closed before completion: statusCode=" + statusCode + " reason=" + reason));
+        }
+        return null;
+    }
+
+    /**
+     * Handles one JSON-RPC frame: messages carrying an {@code id} are RPC
+     * responses, everything else is dispatched as a notification.
+     *
+     * @param frame the raw JSON text.
+     */
+    void handleFrame(String frame) {
+        JsonNode node;
+        try {
+            node = objectMapper.readTree(frame);
+        } catch (Exception ex) {
+            log.warn("Ignored non-JSON frame from Codex app-server");
+            return;
+        }
+        if (node.hasNonNull("id")) {
+            CompletableFuture<JsonNode> rpc = pendingRpcs.remove(node.get("id").asLong());
+            if (Objects.isNull(rpc)) {
+                return;
+            }
+            if (node.hasNonNull("error")) {
+                rpc.completeExceptionally(new CodexAppServerException(
+                        "Codex RPC failed: " + node.get("error").toString()));
+            } else {
+                rpc.complete(node.path("result"));
+            }
+            return;
+        }
+        String method = node.path("method").asText("");
+        JsonNode params = node.path("params");
+        switch (method) {
+            case "item/completed" -> onItemCompleted(params);
+            case "turn/completed" -> onTurnCompleted(params);
+            case "turn/failed" -> completeError(new CodexAppServerException(
+                    "Codex turn failed: " + params.path("message").asText("unknown")));
+            case "error" -> completeError(new CodexAppServerException(
+                    "Codex server error: " + params.toString()));
+            default -> log.debug("Ignored Codex notification: method={}", method);
+        }
+    }
+
+    private void onItemCompleted(JsonNode params) {
+        JsonNode item = params.path("item");
+        String type = firstText(item, "type", "itemType");
+        if (hasText(type) && !AGENT_MESSAGE_TYPES.contains(type)) {
+            log.debug("Ignored completed item: type={}", type);
+            return;
+        }
+        String text = firstText(item, "text", "content");
+        if (!hasText(text)) {
+            return;
+        }
+        content.append(text);
+        if (Objects.nonNull(request.getOnDelta())) {
+            request.getOnDelta().accept(text);
+        }
+    }
+
+    private void onTurnCompleted(JsonNode params) {
+        rememberThreadMapping();
+        String finalContent = content.length() > 0 ? content.toString() : params.path("message").asText("");
+        future.complete(AppServerTurnResult.builder()
+                .threadId(threadId)
+                .content(finalContent)
+                .finishReason("stop")
+                .build());
+        close();
+    }
+
+    private CompletableFuture<JsonNode> newRpc(String method, Map<String, Object> params) {
+        long id = rpcIds.incrementAndGet();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("jsonrpc", "2.0");
+        payload.put("id", id);
+        payload.put("method", method);
+        payload.put("params", params);
+        CompletableFuture<JsonNode> rpc = new CompletableFuture<>();
+        pendingRpcs.put(id, rpc);
+        rpc.exceptionally(error -> {
+            completeError(unwrap(error));
+            return null;
+        });
+        sendText(toJson(payload));
+        return rpc;
+    }
+
+    Map<String, Object> buildThreadStartParams(String resumeThreadId) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        if (hasText(resumeThreadId)) {
+            params.put("threadId", resumeThreadId);
+        }
+        return params;
+    }
+
+    Map<String, Object> buildTurnStartParams(String targetThreadId) {
+        Map<String, Object> input = new LinkedHashMap<>();
+        input.put("type", "text");
+        input.put("text", request.getPrompt());
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("threadId", targetThreadId);
+        params.put("input", List.of(input));
+        return params;
+    }
+
+    private void rememberThreadMapping() {
+        String sessionKey = request.normalizedSessionKey();
+        if (Objects.nonNull(sessionKey) && hasText(threadId)) {
+            threadBySession.put(sessionKey, threadId);
+        }
+    }
+
+    private void sendText(String text) {
+        sentMessages.add(text);
+        WebSocket socket = webSocket;
+        if (Objects.nonNull(socket)) {
+            socket.sendText(text, true);
+        }
+    }
+
+    private void close() {
+        WebSocket socket = webSocket;
+        if (Objects.nonNull(socket)) {
+            socket.sendClose(WebSocket.NORMAL_CLOSURE, "turn completed");
+        }
+    }
+
+    private void abort() {
+        WebSocket socket = webSocket;
+        if (Objects.nonNull(socket)) {
+            socket.abort();
+        }
+    }
+
+    private void completeError(Throwable error) {
+        if (!future.isDone()) {
+            future.completeExceptionally(error);
+        }
+        abort();
+    }
+
+    private String extractThreadId(JsonNode result) {
+        String threadId = firstText(result, "threadId", "thread_id");
+        return hasText(threadId) ? threadId : null;
+    }
+
+    private String firstText(JsonNode node, String... fields) {
+        if (Objects.isNull(node)) {
+            return null;
+        }
+        for (String field : fields) {
+            String value = node.path(field).asText(null);
+            if (hasText(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private String toJson(Map<String, Object> value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception ex) {
+            throw new CodexAppServerException("Codex RPC serialization failed", ex);
+        }
+    }
+
+    private Throwable unwrap(Throwable error) {
+        Throwable current = error;
+        while ((current instanceof CompletionException || current instanceof java.util.concurrent.ExecutionException)
+                && Objects.nonNull(current.getCause())) {
+            current = current.getCause();
+        }
+        return current;
+    }
+
+    private static boolean hasText(String value) {
+        return Objects.nonNull(value) && !value.trim().isEmpty();
+    }
+
+    List<String> sentMessages() {
+        return sentMessages;
+    }
+
+    CompletableFuture<AppServerTurnResult> future() {
+        return future;
+    }
+
+    /**
+     * Normalizes the configured base URL into a WebSocket address.
+     *
+     * <p>{@code ws}/{@code wss} are kept as-is; {@code http}/{@code https} are
+     * upgraded; only trailing slashes are stripped and no path is appended
+     * (the Codex app-server listens on the root path).</p>
+     *
+     * @param baseUrl the configured base URL.
+     * @return the WebSocket URL.
+     * @throws IllegalArgumentException when the URL is blank or uses an
+     *                                  unsupported scheme.
+     */
+    static String toWebSocketUrl(String baseUrl) {
+        if (!hasText(baseUrl)) {
+            throw new IllegalArgumentException("Codex base-url must not be blank");
+        }
+        String trimmed = baseUrl.trim().replaceAll("/+$", "");
+        if (trimmed.startsWith("ws://") || trimmed.startsWith("wss://")) {
+            return trimmed;
+        }
+        if (trimmed.startsWith("https://")) {
+            return "wss://" + trimmed.substring("https://".length());
+        }
+        if (trimmed.startsWith("http://")) {
+            return "ws://" + trimmed.substring("http://".length());
+        }
+        throw new IllegalArgumentException("Codex base-url must be a ws/wss/http/https address: " + baseUrl);
+    }
+}
