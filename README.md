@@ -76,9 +76,15 @@ Typical scenarios:
 | Interactive sessions | Active development | `startSession()`, `startSession(prompt)`, `startSession(GlobalOptions, prompt)` |
 | Session lifecycle | Active development | `resumeSession`, `resumeLastSession`, `forkSession`, `forkLastSession`, `archiveSession`, `unarchiveSession`, `execResume` |
 | Doctor & review | Active development | `doctor`, `doctorJson`, `doctorSummary`, `review`, `reviewCommit`, `reviewBase` |
-| Auth / MCP / misc | Active development | `login`, `logout`, `mcpList` / `mcpAdd` / `mcpGet` / `mcpRemove`, `update`, `features`, `completion`, `app` |
+| Auth / MCP / misc | Active development | `login`, `loginWithApiKey`, `loginWithAccessToken`, `loginDeviceAuth`, `loginStatus`, `logout`, `mcpList` / `mcpAdd` / `mcpGet` / `mcpRemove` / `mcpLogin` / `mcpLogout`, `update`, `features`, `completion`, `app` |
+| Session admin | Active development | `archiveSession`, `unarchiveSession`, `queue`, `deleteSession`, `deleteSessionForce`, `agents`, `migrateRollouts` |
 | App-server WebSocket route | Active development | `CodexAppServerClient.runTurn` / `runTurnAsync`, `thread/start` / `thread/resume`, agent-message deltas, `sessionKey → threadId` LRU (1000) |
 | Config model | Active development | `CodexClientConfig` POJO (plain, Spring-bindable), `CodexAppServerConfig` POJO |
+
+> **Note**: `codex mcp-server` was removed upstream — `CodexClient.mcpServer()`
+> is deprecated in favour of `appServer(...)`. `ExecOptions` additionally
+> supports `--ignore-rules` / `--ignore-user-config`, and `GlobalOptions`
+> supports `--remote` / `--remote-auth-token-env` for daemon-backed TUI runs.
 
 > **Assumption**: the capability statuses above reflect the current state of
 > the active branch; the module is under active development.

@@ -465,6 +465,31 @@ class CodexClientTest {
     }
 
     @Test
+    void shouldDelegateLoginVariants() {
+        assertTrue(echoClient().loginWithApiKey("sk-test").getStdout().contains("--with-api-key"));
+        assertTrue(echoClient().loginWithAccessToken("tok-1").getStdout().contains("--with-access-token"));
+        assertTrue(echoClient().loginDeviceAuth().getStdout().contains("--device-auth"));
+        assertTrue(echoClient().loginStatus().getStdout().contains("status"));
+    }
+
+    @Test
+    void shouldDelegateQueueAndDelete() {
+        CodexCliResult queued = echoClient().queue("sess-1", "continue");
+        assertTrue(queued.getStdout().contains("queue"));
+        assertTrue(queued.getStdout().contains("--thread sess-1"));
+        assertTrue(queued.getStdout().contains("--message continue"));
+
+        assertTrue(echoClient().deleteSession("sess-1").getStdout().contains("delete"));
+        assertTrue(echoClient().deleteSessionForce("uuid-1").getStdout().contains("--force"));
+    }
+
+    @Test
+    void shouldDelegateAgentsAndMigrateRollouts() {
+        assertTrue(echoClient().agents().getStdout().contains("agents"));
+        assertTrue(echoClient().migrateRollouts("inspect").getStdout().contains("migrate-rollouts"));
+    }
+
+    @Test
     void shouldDelegateMcpList() {
         CodexCliResult result = echoClient().mcpList();
         assertTrue(result.getStdout().contains("mcp"));
@@ -562,7 +587,7 @@ class CodexClientTest {
     @Test
     void shouldDelegateSandboxWithProfile() {
         CodexCliResult result = echoClient().sandbox("strict", new String[]{"ls"});
-        assertTrue(result.getStdout().contains("--permissions-profile"));
+        assertTrue(result.getStdout().contains("--permission-profile"));
     }
 
     @Test

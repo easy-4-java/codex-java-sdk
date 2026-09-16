@@ -73,9 +73,15 @@ SDK 覆盖：
 | 交互式会话 | 活跃开发 | `startSession()`、`startSession(prompt)`、`startSession(GlobalOptions, prompt)` |
 | 会话生命周期 | 活跃开发 | `resumeSession`、`resumeLastSession`、`forkSession`、`forkLastSession`、`archiveSession`、`unarchiveSession`、`execResume` |
 | Doctor 与 review | 活跃开发 | `doctor`、`doctorJson`、`doctorSummary`、`review`、`reviewCommit`、`reviewBase` |
-| 认证 / MCP / 其他 | 活跃开发 | `login`、`logout`、`mcpList` / `mcpAdd` / `mcpGet` / `mcpRemove`、`update`、`features`、`completion`、`app` |
+| 认证 / MCP / 其他 | 活跃开发 | `login`、`loginWithApiKey`、`loginWithAccessToken`、`loginDeviceAuth`、`loginStatus`、`logout`、`mcpList` / `mcpAdd` / `mcpGet` / `mcpRemove` / `mcpLogin` / `mcpLogout`、`update`、`features`、`completion`、`app` |
+| 会话管理 | 活跃开发 | `archiveSession`、`unarchiveSession`、`queue`、`deleteSession`、`deleteSessionForce`、`agents`、`migrateRollouts` |
 | App-server WebSocket 路线 | 活跃开发 | `CodexAppServerClient.runTurn` / `runTurnAsync`、`thread/start` / `thread/resume`、agent 消息 delta、`sessionKey → threadId` LRU（1000） |
 | 配置模型 | 活跃开发 | `CodexClientConfig` POJO（纯对象，可绑定 Spring 配置）、`CodexAppServerConfig` POJO |
+
+> **注意**：上游已移除 `codex mcp-server` 子命令——`CodexClient.mcpServer()`
+> 已标记废弃，请改用 `appServer(...)`。`ExecOptions` 额外支持
+> `--ignore-rules` / `--ignore-user-config`；`GlobalOptions` 支持
+> `--remote` / `--remote-auth-token-env`（连接远程 app-server 的 TUI 运行）。
 
 > **假设**：以上能力状态反映当前活跃分支的情况；该模块处于活跃开发中。
 

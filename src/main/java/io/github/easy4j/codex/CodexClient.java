@@ -573,6 +573,62 @@ public class CodexClient implements AutoCloseable {
     }
 
     // ============================================================
+    // queue / delete / agents / migrate-rollouts
+    // ============================================================
+
+    /**
+     * Queues {@code message} for an existing session via
+     * {@code codex queue --thread <thread> --message <message>}.
+     *
+     * @param thread  the session UUID or exact session name.
+     * @param message the message text to queue.
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult queue(String thread, String message) { return cli.queue(thread, message); }
+
+    /**
+     * Permanently deletes a saved session via {@code codex delete <session>}.
+     * The CLI prompts for confirmation on a TTY; prefer
+     * {@link #deleteSessionForce(String)} for non-interactive use.
+     *
+     * @param session the session UUID or session name.
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult deleteSession(String session) { return cli.delete(session); }
+
+    /**
+     * Permanently deletes a session without prompting via
+     * {@code codex delete --force <session>}. Requires a session UUID.
+     *
+     * @param sessionUuid the session UUID.
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult deleteSessionForce(String sessionUuid) { return cli.deleteForce(sessionUuid); }
+
+    /**
+     * Browses agent sessions on the shared local app-server daemon via
+     * {@code codex agents <args...>}.
+     *
+     * @param args optional extra arguments.
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult agents(String... args) { return cli.agents(args); }
+
+    /**
+     * Inspects or migrates legacy local sessions via
+     * {@code codex migrate-rollouts <args...>}.
+     *
+     * @param args optional extra arguments.
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult migrateRollouts(String... args) { return cli.migrateRollouts(args); }
+
+    // ============================================================
     // auth
     // ============================================================
 
@@ -582,6 +638,45 @@ public class CodexClient implements AutoCloseable {
      * @return the raw CLI invocation result; never {@code null}.
      */
     public CodexCliResult login() { return cli.login(); }
+
+    /**
+     * Logs in headlessly with an API key via
+     * {@code codex login --with-api-key} (key piped to stdin).
+     *
+     * @param apiKey the API key.
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult loginWithApiKey(String apiKey) { return cli.loginWithApiKey(apiKey); }
+
+    /**
+     * Logs in with an access token via
+     * {@code codex login --with-access-token} (token piped to stdin).
+     *
+     * @param accessToken the access token.
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult loginWithAccessToken(String accessToken) { return cli.loginWithAccessToken(accessToken); }
+
+    /**
+     * Starts the OAuth device-code login flow via
+     * {@code codex login --device-auth}; the verification URL and device code
+     * are printed on stdout.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult loginDeviceAuth() { return cli.loginDeviceAuth(); }
+
+    /**
+     * Prints the current auth mode via {@code codex login status}; the CLI
+     * exits {@code 0} when logged in.
+     *
+     * @return the raw CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult loginStatus() { return cli.loginStatus(); }
 
     /**
      * Runs {@code codex logout}.
@@ -697,8 +792,14 @@ public class CodexClient implements AutoCloseable {
     /**
      * Runs {@code codex mcp-server}.
      *
+     * <p><strong>Deprecated:</strong> the subcommand has been removed from
+     * recent Codex CLI releases &mdash; use {@link #appServer(String...)}.
+     * Kept for callers pinned to older CLI builds.</p>
+     *
      * @return the raw CLI invocation result; never {@code null}.
+     * @deprecated upstream removed {@code codex mcp-server}; use {@link #appServer(String...)}.
      */
+    @Deprecated
     public CodexCliResult mcpServer() { return cli.mcpServer(); }
 
     /**
@@ -717,7 +818,7 @@ public class CodexClient implements AutoCloseable {
     public CodexCliResult sandbox(String... command) { return cli.sandbox(command); }
 
     /**
-     * Runs {@code codex sandbox --permissions-profile <profile> <command...>}.
+     * Runs {@code codex sandbox --permission-profile <profile> <command...>}.
      *
      * @param profile the permissions profile name.
      * @param command the shell command to execute inside the sandbox.

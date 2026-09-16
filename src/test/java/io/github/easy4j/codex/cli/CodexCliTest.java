@@ -22,6 +22,7 @@ import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -340,6 +341,106 @@ class CodexCliTest {
         assertTrue(result.getStdout().contains("logout"));
     }
 
+    @Test
+    void shouldDelegateLoginWithApiKey() {
+        CodexCliResult result = echoCli().loginWithApiKey("sk-test");
+        assertTrue(result.getStdout().contains("login"));
+        assertTrue(result.getStdout().contains("--with-api-key"));
+    }
+
+    @Test
+    void shouldDelegateLoginWithAccessToken() {
+        CodexCliResult result = echoCli().loginWithAccessToken("tok-123");
+        assertTrue(result.getStdout().contains("login"));
+        assertTrue(result.getStdout().contains("--with-access-token"));
+    }
+
+    @Test
+    void shouldDelegateLoginDeviceAuth() {
+        CodexCliResult result = echoCli().loginDeviceAuth();
+        assertTrue(result.getStdout().contains("login"));
+        assertTrue(result.getStdout().contains("--device-auth"));
+    }
+
+    @Test
+    void shouldDelegateLoginStatus() {
+        CodexCliResult result = echoCli().loginStatus();
+        assertTrue(result.getStdout().contains("login"));
+        assertTrue(result.getStdout().contains("status"));
+    }
+
+    // ----------------------------------------------------------------
+    // queue / delete / agents / migrate-rollouts
+    // ----------------------------------------------------------------
+
+    @Test
+    void shouldDelegateQueue() {
+        CodexCliResult result = echoCli().queue("sess-1", "continue");
+        String out = result.getStdout();
+        assertTrue(out.contains("queue"));
+        assertTrue(out.contains("--thread sess-1"));
+        assertTrue(out.contains("--message continue"));
+    }
+
+    @Test
+    void shouldDelegateDelete() {
+        CodexCliResult result = echoCli().delete("sess-1");
+        String out = result.getStdout();
+        assertTrue(out.contains("delete"));
+        assertTrue(out.contains("sess-1"));
+        assertFalse(out.contains("--force"));
+    }
+
+    @Test
+    void shouldDelegateDeleteForce() {
+        CodexCliResult result = echoCli().deleteForce("0f1e2d3c-0000-0000-0000-000000000000");
+        String out = result.getStdout();
+        assertTrue(out.contains("delete"));
+        assertTrue(out.contains("--force"));
+    }
+
+    @Test
+    void shouldDelegateAgents() {
+        CodexCliResult result = echoCli().agents("--no-alt-screen");
+        assertTrue(result.getStdout().contains("agents"));
+    }
+
+    @Test
+    void shouldDelegateMigrateRollouts() {
+        CodexCliResult result = echoCli().migrateRollouts("inspect");
+        assertTrue(result.getStdout().contains("migrate-rollouts"));
+        assertTrue(result.getStdout().contains("inspect"));
+    }
+
+    // ----------------------------------------------------------------
+    // option builders — newly aligned flags
+    // ----------------------------------------------------------------
+
+    @Test
+    void shouldBuildExecOptionsWithIgnoreFlags() {
+        String[] args = new CodexCli.ExecOptions("hi")
+                .ignoreRules(true)
+                .ignoreUserConfig(true)
+                .toArgs();
+
+        String joined = String.join(" ", args);
+        assertTrue(joined.contains("--ignore-rules"));
+        assertTrue(joined.contains("--ignore-user-config"));
+        assertEquals("hi", args[args.length - 1], "prompt must stay the last positional argument");
+    }
+
+    @Test
+    void shouldBuildGlobalOptionsWithRemoteFlags() {
+        String[] args = new CodexCli.GlobalOptions()
+                .remote("ws://127.0.0.1:8081")
+                .remoteAuthTokenEnv("CODEX_REMOTE_TOKEN")
+                .toArgs();
+
+        String joined = String.join(" ", args);
+        assertTrue(joined.contains("--remote ws://127.0.0.1:8081"));
+        assertTrue(joined.contains("--remote-auth-token-env CODEX_REMOTE_TOKEN"));
+    }
+
     // ----------------------------------------------------------------
     // mcp
     // ----------------------------------------------------------------
@@ -480,7 +581,7 @@ class CodexCliTest {
         CodexCliResult result = echoCli().sandbox("strict", new String[]{"ls"});
         String out = result.getStdout();
         assertTrue(out.contains("sandbox"));
-        assertTrue(out.contains("--permissions-profile"));
+        assertTrue(out.contains("--permission-profile"));
         assertTrue(out.contains("strict"));
     }
 

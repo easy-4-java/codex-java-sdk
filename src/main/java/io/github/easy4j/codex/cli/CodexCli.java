@@ -472,6 +472,87 @@ public class CodexCli {
     }
 
     // ============================================================
+    // queue / delete / agents / migrate-rollouts
+    // ============================================================
+
+    /**
+     * Runs {@code codex queue --thread <thread> --message <message>}.
+     *
+     * <p>Queues a message for an existing session; the session may be running.
+     * {@code thread} accepts a session UUID or an exact session name.</p>
+     *
+     * @param thread  the session UUID or exact session name.
+     * @param message the message text to queue.
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult queue(String thread, String message) {
+        return executor.execute("queue", "--thread", thread, "--message", message);
+    }
+
+    /**
+     * Runs {@code codex delete <session>}.
+     *
+     * <p>Permanently deletes a saved session. The interactive CLI prompts for
+     * confirmation before deleting; when driving a non-TTY subprocess prefer
+     * {@link #deleteForce(String)}, which skips the prompt but requires a
+     * session UUID.</p>
+     *
+     * @param session the session UUID or session name.
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult delete(String session) {
+        return executor.execute("delete", session);
+    }
+
+    /**
+     * Runs {@code codex delete --force <session>}.
+     *
+     * <p>Deletes without prompting. The CLI requires {@code session} to be a
+     * UUID when {@code --force} is used.</p>
+     *
+     * @param session the session UUID.
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult deleteForce(String session) {
+        return executor.execute("delete", "--force", session);
+    }
+
+    /**
+     * Runs {@code codex agents <args...>}.
+     *
+     * <p>Browses agent sessions on the shared local app-server daemon.</p>
+     *
+     * @param args optional extra arguments (e.g. {@code -C}, {@code --no-alt-screen}).
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult agents(String... args) {
+        String[] all = new String[args.length + 1];
+        all[0] = "agents";
+        System.arraycopy(args, 0, all, 1, args.length);
+        return executor.execute(all);
+    }
+
+    /**
+     * Runs {@code codex migrate-rollouts <args...>}.
+     *
+     * <p>Inspects or migrates legacy local sessions to paginated thread history.</p>
+     *
+     * @param args optional extra arguments forwarded to the migration tool.
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult migrateRollouts(String... args) {
+        String[] all = new String[args.length + 1];
+        all[0] = "migrate-rollouts";
+        System.arraycopy(args, 0, all, 1, args.length);
+        return executor.execute(all);
+    }
+
+    // ============================================================
     // apply
     // ============================================================
 
@@ -496,6 +577,55 @@ public class CodexCli {
      */
     public CodexCliResult login() {
         return executor.execute("login");
+    }
+
+    /**
+     * Runs {@code codex login --with-api-key}, piping {@code apiKey} to the
+     * child process's standard input (the documented headless auth form:
+     * {@code printenv OPENAI_API_KEY | codex login --with-api-key}).
+     *
+     * @param apiKey the API key written to the CLI's stdin.
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult loginWithApiKey(String apiKey) {
+        return executor.executeWithStdin(apiKey + "\n", "login", "--with-api-key");
+    }
+
+    /**
+     * Runs {@code codex login --with-access-token}, piping {@code accessToken}
+     * to the child process's standard input.
+     *
+     * @param accessToken the access token written to the CLI's stdin.
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult loginWithAccessToken(String accessToken) {
+        return executor.executeWithStdin(accessToken + "\n", "login", "--with-access-token");
+    }
+
+    /**
+     * Runs {@code codex login --device-auth} (OAuth device code flow). The
+     * device code and verification URL are printed on stdout.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult loginDeviceAuth() {
+        return executor.execute("login", "--device-auth");
+    }
+
+    /**
+     * Runs {@code codex login status}.
+     *
+     * <p>Prints the current auth mode and exits with status {@code 0} when
+     * logged in.</p>
+     *
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult loginStatus() {
+        return executor.execute("login", "status");
     }
 
     /**
@@ -599,8 +729,16 @@ public class CodexCli {
     /**
      * Runs {@code codex mcp-server}.
      *
+     * <p><strong>Deprecated:</strong> the {@code mcp-server} subcommand (and
+     * the {@code codex-mcp-server} binary) has been removed from recent Codex
+     * CLI releases &mdash; use the app server instead
+     * ({@link #appServer(String...)}). Kept for callers pinned to older CLI
+     * builds; against a current CLI this invocation fails.</p>
+     *
      * @return the CLI invocation result; never {@code null}.
+     * @deprecated upstream removed {@code codex mcp-server}; use {@link #appServer(String...)}.
      */
+    @Deprecated
     public CodexCliResult mcpServer() {
         return executor.execute("mcp-server");
     }
@@ -712,7 +850,7 @@ public class CodexCli {
     }
 
     /**
-     * Runs {@code codex sandbox --permissions-profile <name> <command...>}.
+     * Runs {@code codex sandbox --permission-profile <name> <command...>}.
      *
      * @param profile the named permissions profile to load.
      * @param command the shell command to execute inside the sandbox.
@@ -721,7 +859,7 @@ public class CodexCli {
     public CodexCliResult sandbox(String profile, String... command) {
         List<String> all = new ArrayList<>();
         all.add("sandbox");
-        all.add("--permissions-profile");
+        all.add("--permission-profile");
         all.add(profile);
         for (String c : command) all.add(c);
         return executor.execute(all.toArray(new String[0]));
@@ -822,6 +960,8 @@ public class CodexCli {
         private boolean strictConfig;
         private String[] enable;
         private String[] disable;
+        private boolean ignoreRules;
+        private boolean ignoreUserConfig;
 
         /**
          * Creates a new instance bound to the given prompt.
@@ -977,6 +1117,20 @@ public class CodexCli {
          * @return this builder for chaining.
          */
         public ExecOptions disable(String... v) { this.disable = v; return this; }
+        /**
+         * Sets the {@code --ignore-rules} flag.
+         *
+         * @param v {@code true} to skip the repository's Codex ignore rules for this run.
+         * @return this builder for chaining.
+         */
+        public ExecOptions ignoreRules(boolean v) { this.ignoreRules = v; return this; }
+        /**
+         * Sets the {@code --ignore-user-config} flag.
+         *
+         * @param v {@code true} to run without the user-level {@code config.toml}.
+         * @return this builder for chaining.
+         */
+        public ExecOptions ignoreUserConfig(boolean v) { this.ignoreUserConfig = v; return this; }
 
         /**
          * Materialises the configured options into a positional argument list.
@@ -1013,6 +1167,8 @@ public class CodexCli {
             if (disable != null) {
                 for (String d : disable) { args.add("--disable"); args.add(d); }
             }
+            if (ignoreRules) { args.add("--ignore-rules"); }
+            if (ignoreUserConfig) { args.add("--ignore-user-config"); }
             if (prompt != null) { args.add(prompt); }
             return args.toArray(new String[0]);
         }
@@ -1051,6 +1207,8 @@ public class CodexCli {
         private String[] enable;
         private String[] disable;
         private boolean noAltScreen;
+        private String remote;
+        private String remoteAuthTokenEnv;
 
         /**
          * Sets the {@code --model} flag.
@@ -1171,6 +1329,24 @@ public class CodexCli {
          * @return this builder for chaining.
          */
         public GlobalOptions noAltScreen(boolean v) { this.noAltScreen = v; return this; }
+        /**
+         * Sets the {@code --remote} flag, connecting the interactive TUI to a
+         * remote app-server endpoint.
+         *
+         * @param v the remote address: {@code ws://host:port}, {@code wss://host:port},
+         *          {@code unix://} or {@code unix://PATH}.
+         * @return this builder for chaining.
+         */
+        public GlobalOptions remote(String v) { this.remote = v; return this; }
+        /**
+         * Sets the {@code --remote-auth-token-env} flag &mdash; the name of the
+         * environment variable holding the bearer token sent to the remote
+         * app-server WebSocket.
+         *
+         * @param v the environment variable name.
+         * @return this builder for chaining.
+         */
+        public GlobalOptions remoteAuthTokenEnv(String v) { this.remoteAuthTokenEnv = v; return this; }
 
         /**
          * Materialises the configured options into a positional argument list
@@ -1206,6 +1382,8 @@ public class CodexCli {
                 for (String d : disable) { args.add("--disable"); args.add(d); }
             }
             if (noAltScreen) { args.add("--no-alt-screen"); }
+            if (remote != null) { args.add("--remote"); args.add(remote); }
+            if (remoteAuthTokenEnv != null) { args.add("--remote-auth-token-env"); args.add(remoteAuthTokenEnv); }
             return args.toArray(new String[0]);
         }
     }
