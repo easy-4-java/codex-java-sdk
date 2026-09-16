@@ -723,6 +723,238 @@ public class CodexCli {
     }
 
     // ============================================================
+    // debug — typed diagnostics
+    // ============================================================
+
+    /**
+     * Runs {@code codex debug models} — renders the raw model catalog as JSON.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult debugModels() {
+        return executor.execute("debug", "models");
+    }
+
+    /**
+     * Runs {@code codex debug models --bundled} — dumps only the bundled
+     * catalog shipped with the binary, skipping remote refresh.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult debugModelsBundled() {
+        return executor.execute("debug", "models", "--bundled");
+    }
+
+    /**
+     * Runs {@code codex debug prompt-input <prompt>} — renders the
+     * model-visible prompt input list as JSON.
+     *
+     * @param prompt the prompt to render.
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult debugPromptInput(String prompt) {
+        return executor.execute("debug", "prompt-input", prompt);
+    }
+
+    // ============================================================
+    // mcp — typed HTTP server registration
+    // ============================================================
+
+    /**
+     * Runs {@code codex mcp add <name> --url <url>} — registers a streamable
+     * HTTP MCP server.
+     *
+     * @param name the MCP server name.
+     * @param url  the streamable HTTP endpoint URL.
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult mcpAddUrl(String name, String url) {
+        return executor.execute("mcp", "add", name, "--url", url);
+    }
+
+    /**
+     * Runs {@code codex mcp add <name> --url <url> --bearer-token-env-var <env>}
+     * — registers an HTTP MCP server whose bearer token is read from the named
+     * environment variable at runtime (the token itself never appears in
+     * {@code config.toml}).
+     *
+     * @param name              the MCP server name.
+     * @param url               the streamable HTTP endpoint URL.
+     * @param bearerTokenEnvVar environment variable holding the bearer token.
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult mcpAddUrlWithBearer(String name, String url, String bearerTokenEnvVar) {
+        return executor.execute("mcp", "add", name, "--url", url, "--bearer-token-env-var", bearerTokenEnvVar);
+    }
+
+    // ============================================================
+    // plugin — typed lifecycle
+    // ============================================================
+
+    /**
+     * Runs {@code codex plugin add <plugin[@marketplace]>}.
+     *
+     * @param pluginRef plugin reference, optionally {@code @marketplace}-suffixed.
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult pluginAdd(String pluginRef) {
+        return executor.execute("plugin", "add", pluginRef);
+    }
+
+    /**
+     * Runs {@code codex plugin list}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult pluginList() {
+        return executor.execute("plugin", "list");
+    }
+
+    /**
+     * Runs {@code codex plugin remove <plugin[@marketplace]>}.
+     *
+     * @param pluginRef plugin reference to remove.
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult pluginRemove(String pluginRef) {
+        return executor.execute("plugin", "remove", pluginRef);
+    }
+
+    /**
+     * Runs {@code codex plugin marketplace add <source>} — registers a
+     * marketplace from GitHub shorthand, a Git URL, or a local directory.
+     *
+     * @param source the marketplace source.
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult pluginMarketplaceAdd(String source) {
+        return executor.execute("plugin", "marketplace", "add", source);
+    }
+
+    /**
+     * Runs {@code codex plugin marketplace list}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult pluginMarketplaceList() {
+        return executor.execute("plugin", "marketplace", "list");
+    }
+
+    /**
+     * Runs {@code codex plugin marketplace remove <name>}.
+     *
+     * @param name the marketplace name.
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult pluginMarketplaceRemove(String name) {
+        return executor.execute("plugin", "marketplace", "remove", name);
+    }
+
+    /**
+     * Runs {@code codex plugin marketplace upgrade <name>}.
+     *
+     * @param name the marketplace name to upgrade.
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult pluginMarketplaceUpgrade(String name) {
+        return executor.execute("plugin", "marketplace", "upgrade", name);
+    }
+
+    // ============================================================
+    // cloud — typed task operations
+    // ============================================================
+
+    /**
+     * Runs {@code codex cloud exec --env <envId> <query>} — submits a task to
+     * Codex Cloud directly.
+     *
+     * @param envId the cloud environment id (required by the CLI).
+     * @param query the task query.
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult cloudExec(String envId, String query) {
+        return executor.execute("cloud", "exec", "--env", envId, query);
+    }
+
+    /**
+     * Runs {@code codex cloud list --env <envId> --json} — lists cloud tasks
+     * as machine-readable JSON.
+     *
+     * @param envId the cloud environment id (required by the CLI).
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult cloudList(String envId) {
+        return executor.execute("cloud", "list", "--env", envId, "--json");
+    }
+
+    // ============================================================
+    // features — typed flag management
+    // ============================================================
+
+    /**
+     * Runs {@code codex features enable <feature>} — persists the flag in
+     * {@code $CODEX_HOME/config.toml}.
+     *
+     * @param feature the feature flag name.
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult featuresEnable(String feature) {
+        return executor.execute("features", "enable", feature);
+    }
+
+    /**
+     * Runs {@code codex features disable <feature>}.
+     *
+     * @param feature the feature flag name.
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult featuresDisable(String feature) {
+        return executor.execute("features", "disable", feature);
+    }
+
+    /**
+     * Runs {@code codex features list}.
+     *
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult featuresList() {
+        return executor.execute("features", "list");
+    }
+
+    // ============================================================
+    // review — custom prompt
+    // ============================================================
+
+    /**
+     * Runs {@code codex review <prompt>} — a non-interactive review driven by
+     * a custom instruction.
+     *
+     * @param prompt the review instruction.
+     * @return the CLI invocation result; never {@code null}.
+     * @since 3.0.0
+     */
+    public CodexCliResult reviewPrompt(String prompt) {
+        return executor.execute("review", prompt);
+    }
+
+    // ============================================================
     // mcp-server
     // ============================================================
 

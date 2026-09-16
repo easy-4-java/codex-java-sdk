@@ -412,6 +412,33 @@ class CodexCliTest {
         assertTrue(result.getStdout().contains("inspect"));
     }
 
+    @Test
+    void shouldDelegateTypedCliAdditions() {
+        assertTrue(echoCli().debugModels().getStdout().contains("models"));
+        assertTrue(echoCli().debugModelsBundled().getStdout().contains("--bundled"));
+        assertTrue(echoCli().debugPromptInput("hi").getStdout().contains("prompt-input"));
+        assertTrue(echoCli().mcpAddUrl("srv", "https://mcp.example/sse").getStdout()
+                .contains("--url https://mcp.example/sse"));
+        assertTrue(echoCli().mcpAddUrlWithBearer("srv", "https://mcp.example/sse", "MCP_TOKEN").getStdout()
+                .contains("--bearer-token-env-var MCP_TOKEN"));
+        assertTrue(echoCli().pluginAdd("p@m").getStdout().contains("plugin add p@m"));
+        assertTrue(echoCli().pluginList().getStdout().contains("plugin list"));
+        assertTrue(echoCli().pluginRemove("p@m").getStdout().contains("plugin remove p@m"));
+        assertTrue(echoCli().pluginMarketplaceAdd("gh:x/y").getStdout().contains("marketplace add gh:x/y"));
+        assertTrue(echoCli().pluginMarketplaceList().getStdout().contains("marketplace list"));
+        assertTrue(echoCli().pluginMarketplaceRemove("m1").getStdout().contains("marketplace remove m1"));
+        assertTrue(echoCli().pluginMarketplaceUpgrade("m1").getStdout().contains("marketplace upgrade m1"));
+        assertTrue(echoCli().cloudExec("env1", "fix it").getStdout().contains("--env env1"));
+        assertTrue(echoCli().cloudExec("env1", "fix it").getStdout().contains("fix it"));
+        assertTrue(echoCli().cloudList("env1").getStdout().contains("--env env1"));
+        assertTrue(echoCli().cloudList("env1").getStdout().contains("--json"));
+        assertTrue(echoCli().featuresEnable("f1").getStdout().contains("enable f1"));
+        assertTrue(echoCli().featuresDisable("f1").getStdout().contains("disable f1"));
+        assertTrue(echoCli().featuresList().getStdout().contains("features list"));
+        assertTrue(echoCli().reviewPrompt("focus on security").getStdout().contains("review"));
+        assertTrue(echoCli().reviewPrompt("focus on security").getStdout().contains("focus on security"));
+    }
+
     // ----------------------------------------------------------------
     // option builders — newly aligned flags
     // ----------------------------------------------------------------

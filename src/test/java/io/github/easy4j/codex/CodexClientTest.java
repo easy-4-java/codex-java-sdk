@@ -490,6 +490,21 @@ class CodexClientTest {
     }
 
     @Test
+    void shouldDelegateTypedCliAdditions() {
+        assertTrue(echoClient().debugModels().getStdout().contains("models"));
+        assertTrue(echoClient().debugPromptInput("hi").getStdout().contains("prompt-input"));
+        assertTrue(echoClient().mcpAddUrl("srv", "https://mcp.example/sse").getStdout().contains("--url"));
+        assertTrue(echoClient().mcpAddUrlWithBearer("srv", "u", "T").getStdout().contains("--bearer-token-env-var"));
+        assertTrue(echoClient().pluginAdd("p@m").getStdout().contains("plugin add"));
+        assertTrue(echoClient().pluginMarketplaceAdd("gh:x/y").getStdout().contains("marketplace add"));
+        assertTrue(echoClient().cloudExec("env1", "q").getStdout().contains("--env env1"));
+        assertTrue(echoClient().cloudList("env1").getStdout().contains("--json"));
+        assertTrue(echoClient().featuresEnable("f1").getStdout().contains("enable f1"));
+        assertTrue(echoClient().featuresDisable("f1").getStdout().contains("disable f1"));
+        assertTrue(echoClient().reviewPrompt("check").getStdout().contains("review check"));
+    }
+
+    @Test
     void shouldDelegateMcpList() {
         CodexCliResult result = echoClient().mcpList();
         assertTrue(result.getStdout().contains("mcp"));
