@@ -6,4 +6,8 @@
 # coreutils echo (Linux) interprets --version/--help as flags while BSD echo
 # (macOS) prints them literally.
 #
+# Drain piped stdin first: real `codex login --with-api-key` consumes its
+# stdin payload; reading to EOF also keeps the executor's input pump race-free
+# (an immediately-closed pipe yields instant EOF here).
+cat > /dev/null 2>/dev/null
 printf '%s\n' "$*"
