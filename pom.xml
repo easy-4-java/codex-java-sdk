@@ -47,7 +47,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- Dependency versions -->
         <additionalparam>-Xdoclint:none</additionalparam>
-        <commons-exec.version>1.4.0</commons-exec.version>
+        <commons-exec.version>1.6.0</commons-exec.version>
         <jackson-bom.version>2.18.9</jackson-bom.version>
         <junit.version>5.11.4</junit.version>
         <junit-jupiter.version>5.11.4</junit-jupiter.version>
