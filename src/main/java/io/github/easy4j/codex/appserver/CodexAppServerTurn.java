@@ -135,14 +135,27 @@ class CodexAppServerTurn implements WebSocket.Listener {
     }
 
     /**
-     * Sends the first RPC: {@code thread/resume} when the session key already
-     * maps to a thread id, {@code thread/start} otherwise.
+     * Sends the JSON-RPC lifecycle handshake first — real codex app-servers
+     * (verified against 0.154.0) reject any request before
+     * {@code initialize} with {@code -32600 Not initialized} — then starts or
+     * resumes the thread.
      *
      * <p>Split from {@link #onOpen(WebSocket)} so contract tests can drive the
      * turn without a socket; requests are only recorded in
      * {@link #sentMessages} when no socket is attached.</p>
      */
     void begin() {
+        CompletableFuture<JsonNode> initRpc = newRpc("initialize", buildInitializeParams());
+        initRpc.thenAccept(result -> {
+            sendNotification("notifications/initialized");
+            startOrResumeThread();
+        }).exceptionally(error -> {
+            completeError(unwrap(error));
+            return null;
+        });
+    }
+
+    private void startOrResumeThread() {
         String sessionKey = request.normalizedSessionKey();
         String previousThreadId = Objects.isNull(sessionKey) ? null : threadBySession.get(sessionKey);
         boolean resume = hasText(previousThreadId);
@@ -319,6 +332,22 @@ class CodexAppServerTurn implements WebSocket.Listener {
         return params;
     }
 
+    Map<String, Object> buildInitializeParams() {
+        Map<String, Object> clientInfo = new LinkedHashMap<>();
+        clientInfo.put("name", "easy4j-codex-java-sdk");
+        clientInfo.put("version", "2.0.x");
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("clientInfo", clientInfo);
+        return params;
+    }
+
+    private void sendNotification(String method) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("jsonrpc", "2.0");
+        payload.put("method", method);
+        sendText(toJson(payload));
+    }
+
     Map<String, Object> buildTurnStartParams(String targetThreadId) {
         Map<String, Object> input = new LinkedHashMap<>();
         input.put("type", "text");
@@ -366,7 +395,12 @@ class CodexAppServerTurn implements WebSocket.Listener {
     }
 
     private String extractThreadId(JsonNode result) {
-        String threadId = firstText(result, "threadId", "thread_id");
+        // codex ≥0.14x 将线程对象嵌套在 result.thread（实测 0.154.0 返回
+        // result.thread.id = UUID）；旧版本为顶层 threadId/thread_id。两者都兼容。
+        String threadId = firstText(result.path("thread"), "id", "threadId", "thread_id");
+        if (!hasText(threadId)) {
+            threadId = firstText(result, "threadId", "thread_id");
+        }
         return hasText(threadId) ? threadId : null;
     }
 
