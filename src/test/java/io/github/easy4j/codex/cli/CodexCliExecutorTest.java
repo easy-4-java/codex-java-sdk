@@ -18,6 +18,12 @@ package io.github.easy4j.codex.cli;
 import io.github.easy4j.codex.CodexClientConfig;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.concurrent.TimeUnit;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -156,6 +162,37 @@ class CodexCliExecutorTest {
         CodexCliExecutor executor = new CodexCliExecutor(configFor("/nonexistent/path/to/codex"));
 
         assertFalse(executor.probe());
+    }
+
+    @Test
+    void shouldUseProbeTimeoutWithoutChangingNormalCommandTimeout() throws Exception {
+        Path script = Files.createTempFile("slow-codex-", ".sh");
+        Files.write(script, Arrays.asList(
+                "#!/bin/sh",
+                "sleep 2",
+                "echo codex-test"
+        ), StandardCharsets.UTF_8);
+        assertTrue(script.toFile().setExecutable(true));
+
+        CodexClientConfig config = configFor(script.toAbsolutePath().toString());
+        config.setLocalProbeTimeoutSeconds(1);
+        config.setLocalTimeoutSeconds(5);
+        CodexCliExecutor executor = new CodexCliExecutor(config);
+
+        long probeStarted = System.nanoTime();
+        assertFalse(executor.probe());
+        long probeElapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - probeStarted);
+        assertTrue(probeElapsedMs < 3_500,
+                "probe must use localProbeTimeoutSeconds instead of localTimeoutSeconds");
+
+        long executeStarted = System.nanoTime();
+        CodexCliResult normal = executor.execute("--version");
+        long executeElapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - executeStarted);
+        assertTrue(normal.isSuccess(), "normal command must still use localTimeoutSeconds");
+        assertTrue(executeElapsedMs >= 1_500,
+                "normal command should be allowed to outlive the probe timeout");
+
+        Files.deleteIfExists(script);
     }
 
     @Test
