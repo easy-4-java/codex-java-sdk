@@ -344,9 +344,17 @@ class CodexAppServerTurn implements WebSocket.Listener {
                 .threadId(threadId)
                 .turnId(turnId)
                 .content(finalContent)
-                .finishReason("stop")
+                .finishReason(extractFinishReason(params))
                 .build());
         close();
+    }
+
+    private String extractFinishReason(JsonNode params) {
+        String status = firstText(params.path("turn"), "status");
+        if (!hasText(status)) {
+            status = firstText(params, "status", "reason");
+        }
+        return hasText(status) ? status : "completed";
     }
 
     private CompletableFuture<JsonNode> newRpc(String method, Map<String, Object> params) {
