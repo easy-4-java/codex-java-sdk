@@ -23,6 +23,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * Unit tests for {@link CodexCliExecutor}.
  *
@@ -156,6 +158,22 @@ class CodexCliExecutorTest {
         CodexCliExecutor executor = new CodexCliExecutor(configFor("/nonexistent/path/to/codex"));
 
         assertFalse(executor.probe());
+    }
+
+    @Test
+    void shouldUseDedicatedProbeTimeoutWithoutChangingNormalTimeout() {
+        CodexClientConfig config = configFor("/bin/sh -c \"sleep 4; exit 0\"");
+        config.setLocalProbeTimeoutSeconds(1);
+        config.setLocalTimeoutSeconds(8);
+        CodexCliExecutor executor = new CodexCliExecutor(config);
+
+        long started = System.nanoTime();
+        boolean available = executor.probe();
+        long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+
+        assertFalse(available, "probe must time out using localProbeTimeoutSeconds");
+        assertTrue(elapsedMs < 3_000,
+                "probe must not wait for the normal localTimeoutSeconds window; elapsed=" + elapsedMs);
     }
 
     @Test
