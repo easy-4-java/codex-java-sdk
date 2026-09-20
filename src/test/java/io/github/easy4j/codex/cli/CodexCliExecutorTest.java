@@ -23,6 +23,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Paths;
+import java.util.concurrent.TimeUnit;
+
 /**
  * Unit tests for {@link CodexCliExecutor}.
  *
@@ -35,6 +38,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * @since 3.0.0
  */
 class CodexCliExecutorTest {
+
+    private static final String SLOW_CODEX_SCRIPT =
+            Paths.get("src", "test", "resources", "slow-codex.sh").toAbsolutePath().toString();
 
     private CodexClientConfig configFor(String executable) {
         CodexClientConfig config = new CodexClientConfig();
@@ -159,13 +165,30 @@ class CodexCliExecutorTest {
     }
 
     @Test
+    void shouldUseDedicatedProbeTimeoutWithoutChangingNormalTimeout() {
+        CodexClientConfig config = configFor("/bin/sh " + SLOW_CODEX_SCRIPT);
+        config.setLocalProbeTimeoutSeconds(1);
+        config.setLocalTimeoutSeconds(8);
+        CodexCliExecutor executor = new CodexCliExecutor(config);
+
+        long started = System.nanoTime();
+        boolean available = executor.probe();
+        long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+
+        assertFalse(available, "probe must time out using localProbeTimeoutSeconds");
+        assertTrue(elapsedMs < 3_000,
+                "probe must not wait for the normal localTimeoutSeconds window; elapsed=" + elapsedMs);
+    }
+
+    @Test
     void shouldTimeoutOnHangingProcess() {
-        // Use a short timeout and a command that sleeps for a long time.
-        CodexClientConfig config = configFor("/bin/sh");
+        // Keep the blocking loop in the shell process itself so killing the
+        // shell closes stdout/stderr immediately.
+        CodexClientConfig config = configFor("/bin/sh " + SLOW_CODEX_SCRIPT);
         config.setLocalTimeoutSeconds(1);
         CodexCliExecutor executor = new CodexCliExecutor(config);
 
-        CodexCliResult result = executor.execute("-c", "sleep 60");
+        CodexCliResult result = executor.execute();
 
         // On macOS/Linux the watchdog kills the process; the exit code is -1
         // and stderr contains the timeout notice.
