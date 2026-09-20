@@ -171,8 +171,12 @@ class CodexAppServerClientE2ETest {
             List<String> methods = server.receivedFrames().stream()
                     .map(this::methodOf)
                     .toList();
-            assertTrue(methods.contains("initialize"), "generic RPC calls must open with the initialize handshake");
-            assertTrue(methods.contains("initialized"), "initialize must be followed by the initialized notification");
+            assertTrue(methods.size() >= 3, "initialize handshake and business request must all be present");
+            assertEquals("initialize", methods.get(0));
+            assertEquals("notifications/initialized", methods.get(1),
+                    "initialize response must be acknowledged with the official notification name");
+            assertEquals("thread/list", methods.get(2),
+                    "business RPC must follow the initialized acknowledgement");
         }
     }
 
