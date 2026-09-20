@@ -63,7 +63,7 @@ class CodexAppServerClientE2ETest {
 
             assertEquals("th_e2e", result.getThreadId());
             assertEquals("你好世界", result.getContent());
-            assertEquals("stop", result.getFinishReason());
+            assertEquals("completed", result.getFinishReason());
             assertEquals(List.of("你好", "世界"), deltas);
             assertTrue(server.authorizationSeen(), "WebSocket handshake must carry the bearer token");
             // 真实协议（codex ≥0.14x）：turn 前必须先 initialize 握手
