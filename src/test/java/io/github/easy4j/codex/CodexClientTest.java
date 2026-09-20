@@ -53,6 +53,9 @@ class CodexClientTest {
     private static final String ECHO_ARGS_SCRIPT =
             Paths.get("src", "test", "resources", "echo-args.sh").toAbsolutePath().toString();
 
+    private static final String JSON_FLAG_SCRIPT =
+            Paths.get("src", "test", "resources", "json-when-flag.sh").toAbsolutePath().toString();
+
     private static CodexClientConfig echoConfig() {
         CodexClientConfig config = new CodexClientConfig();
         config.setLocalExecutable(ECHO_ARGS_SCRIPT);
@@ -241,6 +244,20 @@ class CodexClientTest {
     // ----------------------------------------------------------------
     // execAndParse
     // ----------------------------------------------------------------
+
+    @Test
+    void shouldForceJsonForExecAndParseWhenDefaultJsonOutputIsDisabled() {
+        CodexClientConfig config = new CodexClientConfig();
+        config.setLocalExecutable("/bin/sh " + JSON_FLAG_SCRIPT);
+        config.setLocalTimeoutSeconds(2);
+        config.setJsonOutput(false);
+
+        List<CodexEvent> events = new CodexClient(config).execAndParse("hello");
+
+        assertEquals(1, events.size(),
+                "execAndParse must force --json even when the normal exec default disables JSON");
+        assertEquals("done", events.get(0).getType());
+    }
 
     @Test
     void shouldReturnEmptyListForBlankOutput() {
