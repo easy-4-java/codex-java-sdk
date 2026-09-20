@@ -78,6 +78,7 @@ public class CodexAppServerClient implements AutoCloseable {
     private final ObjectMapper objectMapper =
             JsonMapper.builder().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build();
     private final ThreadMappingCache threadBySession;
+    private final SessionExecutionCoordinator sessionCoordinator = new SessionExecutionCoordinator();
     private final Object httpClientLock = new Object();
     private final ExecutorService clientExecutor = Executors.newCachedThreadPool(r -> {
         Thread thread = new Thread(r, "codex-app-server-client");
@@ -141,6 +142,19 @@ public class CodexAppServerClient implements AutoCloseable {
         }
         if (Objects.isNull(request.getPrompt()) || request.getPrompt().trim().isEmpty()) {
             throw new IllegalArgumentException("Codex prompt must not be blank");
+        }
+        String sessionKey = request.normalizedSessionKey();
+        if (Objects.isNull(sessionKey)) {
+            return startTurn(request);
+        }
+        return sessionCoordinator.submit(sessionKey, () -> startTurn(request));
+    }
+
+    private CompletableFuture<AppServerTurnResult> startTurn(AppServerTurnRequest request) {
+        if (closed) {
+            CompletableFuture<AppServerTurnResult> failed = new CompletableFuture<>();
+            failed.completeExceptionally(new IllegalStateException("Codex app-server client is closed"));
+            return failed;
         }
         CodexAppServerTurn turn =
                 new CodexAppServerTurn(request, config, objectMapper, threadBySession, httpClient());
