@@ -24,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
@@ -74,6 +75,7 @@ class CodexAppServerTurn implements WebSocket.Listener {
     private final AtomicLong rpcIds = new AtomicLong();
     private final StringBuilder content = new StringBuilder();
     private final StringBuilder frameBuffer = new StringBuilder();
+    private final Set<String> streamedAgentItemIds = ConcurrentHashMap.newKeySet();
     /** Records outgoing RPC payloads; without a socket they are only recorded, for contract tests. */
     private final List<String> sentMessages = new ArrayList<>();
 
@@ -246,6 +248,7 @@ class CodexAppServerTurn implements WebSocket.Listener {
         JsonNode params = node.path("params");
         switch (method) {
             case CodexAppServerProtocol.TURN_STARTED -> onTurnStarted(params);
+            case CodexAppServerProtocol.AGENT_MESSAGE_DELTA -> onAgentMessageDelta(params);
             case CodexAppServerProtocol.ITEM_COMPLETED -> onItemCompleted(params);
             case CodexAppServerProtocol.TURN_COMPLETED -> onTurnCompleted(params);
             case CodexAppServerProtocol.TURN_FAILED -> completeError(new CodexAppServerException(
@@ -266,6 +269,22 @@ class CodexAppServerTurn implements WebSocket.Listener {
         }
     }
 
+    private void onAgentMessageDelta(JsonNode params) {
+        String delta = firstText(params, "delta");
+        if (!hasText(delta)) {
+            return;
+        }
+        String itemId = firstText(params, "itemId", "item_id");
+        if (hasText(itemId)) {
+            streamedAgentItemIds.add(itemId);
+        }
+        String applied = truncateToContentCap(delta);
+        content.append(applied);
+        if (!applied.isEmpty() && Objects.nonNull(request.getOnDelta())) {
+            request.getOnDelta().accept(applied);
+        }
+    }
+
     private void onItemCompleted(JsonNode params) {
         JsonNode item = params.path("item");
         String type = firstText(item, "type", "itemType");
@@ -275,6 +294,10 @@ class CodexAppServerTurn implements WebSocket.Listener {
         }
         String text = firstText(item, "text", "content");
         if (!hasText(text)) {
+            return;
+        }
+        String itemId = firstText(item, "id", "itemId", "item_id");
+        if (hasText(itemId) && streamedAgentItemIds.contains(itemId)) {
             return;
         }
         String applied = truncateToContentCap(text);
