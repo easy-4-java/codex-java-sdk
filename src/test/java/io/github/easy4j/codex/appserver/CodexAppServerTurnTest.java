@@ -309,6 +309,39 @@ class CodexAppServerTurnTest {
     }
 
 
+
+    @Test
+    void shouldBridgeTurnAndDeltaEventsToListener() {
+        List<String> events = new ArrayList<>();
+        CodexAppServerListener listener = new CodexAppServerListener() {
+            @Override
+            public void onTurnStarted(String turnId) {
+                events.add("turn:" + turnId);
+            }
+
+            @Override
+            public void onTextDelta(String delta) {
+                events.add("delta:" + delta);
+            }
+
+            @Override
+            public void onItemCompleted(String itemType, String content) {
+                events.add("item:" + itemType + ":" + content);
+            }
+        };
+        CodexAppServerTurn turn = newTurn(
+                AppServerTurnRequest.builder().prompt("hi").listener(listener).build(),
+                new ThreadMappingCache(10));
+
+        handshake(turn);
+        turn.handleFrame("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"thread\":{\"id\":\"th_1\"}}}");
+        turn.handleFrame("{\"method\":\"turn/started\",\"params\":{\"turnId\":\"turn_1\"}}");
+        turn.handleFrame("{\"method\":\"item/agentMessage/delta\",\"params\":{\"itemId\":\"item_1\",\"delta\":\"你\"}}");
+        turn.handleFrame("{\"method\":\"item/completed\",\"params\":{\"item\":{\"id\":\"item_1\",\"type\":\"agentMessage\",\"text\":\"你\"}}}");
+
+        assertEquals(List.of("turn:turn_1", "delta:你", "item:agentMessage:你"), events);
+    }
+
     @Test
     void shouldStreamRealAgentMessageDeltas() {
         List<String> deltas = new ArrayList<>();
