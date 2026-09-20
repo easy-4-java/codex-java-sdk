@@ -603,7 +603,7 @@ fallback: completed
 mvn -B --no-transfer-progress clean verify
 ```
 
-- [~] **Step 2: If a real app-server endpoint is available, run opt-in integration**（SKIPPED：本机无 codex 二进制/真实端点，按 Step 8 记录为 real-integration skip）
+- [x] **Step 2: If a real app-server endpoint is available, run opt-in integration**（已执行：从 research/codex 源码构建本地 codex 二进制，`codex app-server --listen ws://127.0.0.1:18181` 起真实 daemon；2.0.x/3.0.x 真实集成各 2/2 通过——initialize 握手、thread/list、thread.id 嵌套解析、turn 全链路无协议层错误）
 
 ```bash
 mvn -Dcodex.real.base-url=<url>     -Dcodex.real.token=<optional-token>     -Dtest=CodexAppServerRealIntegrationTest test
