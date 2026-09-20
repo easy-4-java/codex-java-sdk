@@ -182,12 +182,14 @@ class CodexCliExecutorTest {
 
     @Test
     void shouldTimeoutOnHangingProcess() {
-        // Use a short timeout and a command that sleeps for a long time.
-        CodexClientConfig config = configFor("/bin/sh");
+        // Keep the blocking loop in the shell process itself so killing the
+        // shell closes stdout/stderr immediately; a spawned sleep child would
+        // keep inherited pipes open and make the test wait for the child.
+        CodexClientConfig config = configFor("/bin/sh " + SLOW_CODEX_SCRIPT);
         config.setLocalTimeoutSeconds(1);
         CodexCliExecutor executor = new CodexCliExecutor(config);
 
-        CodexCliResult result = executor.execute("-c", "sleep 60");
+        CodexCliResult result = executor.execute();
 
         // On macOS/Linux the watchdog kills the process; the exit code is -1
         // and stderr contains the timeout notice.
