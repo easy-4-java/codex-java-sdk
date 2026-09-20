@@ -1,3 +1,2 @@
 #!/bin/sh
-sleep 4
-exit 0
+while :; do :; done
