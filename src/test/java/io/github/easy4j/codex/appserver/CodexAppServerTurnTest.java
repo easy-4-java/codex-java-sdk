@@ -21,8 +21,13 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.reflect.Proxy;
+import java.net.http.WebSocket;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 
@@ -67,6 +72,44 @@ class CodexAppServerTurnTest {
         }
     }
 
+    private String methodOf(String frame) {
+        try {
+            return mapper.readTree(frame).path("method").asText("");
+        } catch (Exception ex) {
+            throw new IllegalStateException("Invalid frame", ex);
+        }
+    }
+
+    private WebSocket recordingSocket(List<String> writes,
+                                      Queue<CompletableFuture<WebSocket>> completions) {
+        return (WebSocket) Proxy.newProxyInstance(
+                WebSocket.class.getClassLoader(),
+                new Class<?>[]{WebSocket.class},
+                (proxy, method, args) -> {
+                    if ("sendText".equals(method.getName())) {
+                        writes.add((String) args[0]);
+                        CompletableFuture<WebSocket> completion = completions.poll();
+                        return completion == null
+                                ? CompletableFuture.completedFuture((WebSocket) proxy)
+                                : completion;
+                    }
+                    if ("sendClose".equals(method.getName())
+                            || "sendPing".equals(method.getName())
+                            || "sendPong".equals(method.getName())
+                            || "sendBinary".equals(method.getName())) {
+                        return CompletableFuture.completedFuture((WebSocket) proxy);
+                    }
+                    if ("getSubprotocol".equals(method.getName())) {
+                        return "";
+                    }
+                    if ("isInputClosed".equals(method.getName())
+                            || "isOutputClosed".equals(method.getName())) {
+                        return false;
+                    }
+                    return null;
+                });
+    }
+
     /**
      * Drives {@code begin()} through the mandatory initialize handshake:
      * initialize (id=1) → notifications/initialized → thread/start|resume (id=2).
@@ -75,6 +118,55 @@ class CodexAppServerTurnTest {
         turn.begin();
         turn.handleFrame(
                 "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"serverInfo\":{\"name\":\"codex\"}}}");
+    }
+
+    @Test
+    void shouldWaitForInitializedSendBeforeThreadStart() {
+        CodexAppServerTurn turn = newTurn(
+                AppServerTurnRequest.builder().prompt("hi").build(),
+                new ThreadMappingCache(10));
+
+        List<String> socketWrites = new ArrayList<>();
+        Queue<CompletableFuture<WebSocket>> completions = new ArrayDeque<>();
+        CompletableFuture<WebSocket> initializeWrite = new CompletableFuture<>();
+        CompletableFuture<WebSocket> initializedWrite = new CompletableFuture<>();
+        CompletableFuture<WebSocket> threadStartWrite = new CompletableFuture<>();
+        completions.add(initializeWrite);
+        completions.add(initializedWrite);
+        completions.add(threadStartWrite);
+        WebSocket socket = recordingSocket(socketWrites, completions);
+        initializeWrite.complete(socket);
+
+        turn.onOpen(socket);
+        turn.handleFrame("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}");
+
+        assertEquals(2, socketWrites.size(),
+                "thread/start must wait until notifications/initialized finishes sending");
+        assertEquals(CodexAppServerProtocol.INITIALIZED, methodOf(socketWrites.get(1)));
+
+        initializedWrite.complete(socket);
+        assertEquals(3, socketWrites.size());
+        assertEquals(CodexAppServerProtocol.THREAD_START, methodOf(socketWrites.get(2)));
+        threadStartWrite.complete(socket);
+    }
+
+    @Test
+    void shouldFailImmediatelyWhenWebSocketSendFails() {
+        CodexAppServerTurn turn = newTurn(
+                AppServerTurnRequest.builder().prompt("hi").build(),
+                new ThreadMappingCache(10));
+
+        List<String> socketWrites = new ArrayList<>();
+        Queue<CompletableFuture<WebSocket>> completions = new ArrayDeque<>();
+        CompletableFuture<WebSocket> initializeWrite = new CompletableFuture<>();
+        completions.add(initializeWrite);
+        WebSocket socket = recordingSocket(socketWrites, completions);
+
+        turn.onOpen(socket);
+        initializeWrite.completeExceptionally(new RuntimeException("write failed"));
+
+        assertTrue(turn.future().isCompletedExceptionally(),
+                "write failure must fail the turn immediately instead of waiting for read timeout");
     }
 
     @Test
