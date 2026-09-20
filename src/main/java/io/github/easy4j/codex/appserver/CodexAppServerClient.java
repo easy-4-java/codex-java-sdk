@@ -187,7 +187,7 @@ public class CodexAppServerClient implements AutoCloseable {
         if (limit > 0) {
             params.put("limit", limit);
         }
-        JsonNode result = execRpcNode("thread/list", params);
+        JsonNode result = execRpcNode(CodexAppServerProtocol.THREAD_LIST, params);
         List<AppServerThread> threads = new ArrayList<>();
         for (JsonNode node : result.path("threads")) {
             threads.add(parseThread(node));
@@ -205,7 +205,7 @@ public class CodexAppServerClient implements AutoCloseable {
     public AppServerThread readThread(String threadId) {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("threadId", Objects.requireNonNull(threadId, "threadId").trim());
-        JsonNode result = execRpcNode("thread/read", params);
+        JsonNode result = execRpcNode(CodexAppServerProtocol.THREAD_READ, params);
         return parseThread(result.path("thread"));
     }
 
@@ -234,18 +234,18 @@ public class CodexAppServerClient implements AutoCloseable {
     public AppServerThread forkThread(String threadId) {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("threadId", Objects.requireNonNull(threadId, "threadId").trim());
-        JsonNode result = execRpcNode("thread/fork", params);
+        JsonNode result = execRpcNode(CodexAppServerProtocol.THREAD_FORK, params);
         return parseThread(result.path("thread"));
     }
 
     /** Archives a thread via {@code thread/archive}. */
     public void archiveThread(String threadId) {
-        simpleThreadCall("thread/archive", threadId);
+        simpleThreadCall(CodexAppServerProtocol.THREAD_ARCHIVE, threadId);
     }
 
     /** Unarchives a thread via {@code thread/unarchive}. */
     public void unarchiveThread(String threadId) {
-        simpleThreadCall("thread/unarchive", threadId);
+        simpleThreadCall(CodexAppServerProtocol.THREAD_UNARCHIVE, threadId);
     }
 
     /**
@@ -253,7 +253,7 @@ public class CodexAppServerClient implements AutoCloseable {
      * {@code thread/delete}. Ephemeral roots cannot be deleted.
      */
     public void deleteThread(String threadId) {
-        simpleThreadCall("thread/delete", threadId);
+        simpleThreadCall(CodexAppServerProtocol.THREAD_DELETE, threadId);
     }
 
     /**
@@ -269,7 +269,7 @@ public class CodexAppServerClient implements AutoCloseable {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("threadId", Objects.requireNonNull(threadId, "threadId").trim());
         params.put("turnId", Objects.requireNonNull(turnId, "turnId").trim());
-        execRpcNode("turn/interrupt", params);
+        execRpcNode(CodexAppServerProtocol.TURN_INTERRUPT, params);
     }
 
     /**
@@ -290,7 +290,7 @@ public class CodexAppServerClient implements AutoCloseable {
         params.put("threadId", Objects.requireNonNull(threadId, "threadId").trim());
         params.put("expectedTurnId", Objects.requireNonNull(expectedTurnId, "expectedTurnId").trim());
         params.put("input", List.of(input));
-        execRpcNode("turn/steer", params);
+        execRpcNode(CodexAppServerProtocol.TURN_STEER, params);
     }
 
     /**
