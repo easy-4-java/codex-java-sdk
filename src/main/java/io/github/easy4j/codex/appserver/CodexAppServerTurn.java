@@ -145,9 +145,9 @@ class CodexAppServerTurn implements WebSocket.Listener {
      * {@link #sentMessages} when no socket is attached.</p>
      */
     void begin() {
-        CompletableFuture<JsonNode> initRpc = newRpc("initialize", buildInitializeParams());
+        CompletableFuture<JsonNode> initRpc = newRpc(CodexAppServerProtocol.INITIALIZE, buildInitializeParams());
         initRpc.thenAccept(result -> {
-            sendNotification("notifications/initialized");
+            sendNotification(CodexAppServerProtocol.INITIALIZED);
             startOrResumeThread();
         }).exceptionally(error -> {
             completeError(unwrap(error));
@@ -159,7 +159,7 @@ class CodexAppServerTurn implements WebSocket.Listener {
         String sessionKey = request.normalizedSessionKey();
         String previousThreadId = Objects.isNull(sessionKey) ? null : threadBySession.get(sessionKey);
         boolean resume = hasText(previousThreadId);
-        CompletableFuture<JsonNode> rpc = newRpc(resume ? "thread/resume" : "thread/start",
+        CompletableFuture<JsonNode> rpc = newRpc(resume ? CodexAppServerProtocol.THREAD_RESUME : CodexAppServerProtocol.THREAD_START,
                 buildThreadStartParams(resume ? previousThreadId : null));
         rpc.thenAccept(result -> {
             threadId = extractThreadId(result);
@@ -167,7 +167,7 @@ class CodexAppServerTurn implements WebSocket.Listener {
                 completeError(new CodexAppServerException("Codex thread/start returned no threadId"));
                 return;
             }
-            newRpc("turn/start", buildTurnStartParams(threadId));
+            newRpc(CodexAppServerProtocol.TURN_START, buildTurnStartParams(threadId));
         }).exceptionally(error -> {
             completeError(unwrap(error));
             return null;
@@ -235,12 +235,12 @@ class CodexAppServerTurn implements WebSocket.Listener {
         String method = node.path("method").asText("");
         JsonNode params = node.path("params");
         switch (method) {
-            case "turn/started" -> onTurnStarted(params);
-            case "item/completed" -> onItemCompleted(params);
-            case "turn/completed" -> onTurnCompleted(params);
-            case "turn/failed" -> completeError(new CodexAppServerException(
+            case CodexAppServerProtocol.TURN_STARTED -> onTurnStarted(params);
+            case CodexAppServerProtocol.ITEM_COMPLETED -> onItemCompleted(params);
+            case CodexAppServerProtocol.TURN_COMPLETED -> onTurnCompleted(params);
+            case CodexAppServerProtocol.TURN_FAILED -> completeError(new CodexAppServerException(
                     "Codex turn failed: " + params.path("message").asText("unknown")));
-            case "error" -> completeError(new CodexAppServerException(
+            case CodexAppServerProtocol.ERROR -> completeError(new CodexAppServerException(
                     "Codex server error: " + params.toString()));
             default -> log.debug("Ignored Codex notification: method={}", method);
         }
