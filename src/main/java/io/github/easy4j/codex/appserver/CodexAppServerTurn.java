@@ -78,6 +78,7 @@ class CodexAppServerTurn implements WebSocket.Listener {
     private final List<String> sentMessages = new ArrayList<>();
 
     private volatile WebSocket webSocket;
+    private volatile CodexWebSocketSender sender;
     private volatile String threadId;
     private volatile String turnId;
 
@@ -130,6 +131,7 @@ class CodexAppServerTurn implements WebSocket.Listener {
     @Override
     public void onOpen(WebSocket socket) {
         this.webSocket = socket;
+        this.sender = new CodexWebSocketSender(socket);
         socket.request(1);
         begin();
     }
@@ -146,10 +148,18 @@ class CodexAppServerTurn implements WebSocket.Listener {
      */
     void begin() {
         CompletableFuture<JsonNode> initRpc = newRpc(CodexAppServerProtocol.INITIALIZE, buildInitializeParams());
-        initRpc.thenAccept(result -> {
-            sendNotification(CodexAppServerProtocol.INITIALIZED);
-            startOrResumeThread();
-        }).exceptionally(error -> {
+        initRpc.thenAccept(result ->
+                sendNotification(CodexAppServerProtocol.INITIALIZED)
+                        .whenComplete((ignored, sendError) -> {
+                            if (Objects.nonNull(sendError)) {
+                                completeError(new CodexAppServerException(
+                                        "Codex initialized notification send failed",
+                                        unwrap(sendError)));
+                                return;
+                            }
+                            startOrResumeThread();
+                        })
+        ).exceptionally(error -> {
             completeError(unwrap(error));
             return null;
         });
@@ -320,7 +330,13 @@ class CodexAppServerTurn implements WebSocket.Listener {
             completeError(unwrap(error));
             return null;
         });
-        sendText(toJson(payload));
+        sendText(toJson(payload)).whenComplete((ignored, sendError) -> {
+            if (Objects.nonNull(sendError)) {
+                rpc.completeExceptionally(new CodexAppServerException(
+                        "Codex WebSocket send failed for " + method,
+                        unwrap(sendError)));
+            }
+        });
         return rpc;
     }
 
@@ -341,11 +357,11 @@ class CodexAppServerTurn implements WebSocket.Listener {
         return params;
     }
 
-    private void sendNotification(String method) {
+    private CompletionStage<WebSocket> sendNotification(String method) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("jsonrpc", "2.0");
         payload.put("method", method);
-        sendText(toJson(payload));
+        return sendText(toJson(payload));
     }
 
     Map<String, Object> buildTurnStartParams(String targetThreadId) {
@@ -365,12 +381,13 @@ class CodexAppServerTurn implements WebSocket.Listener {
         }
     }
 
-    private void sendText(String text) {
+    private CompletionStage<WebSocket> sendText(String text) {
         sentMessages.add(text);
-        WebSocket socket = webSocket;
-        if (Objects.nonNull(socket)) {
-            socket.sendText(text, true);
+        CodexWebSocketSender currentSender = sender;
+        if (Objects.isNull(currentSender)) {
+            return CompletableFuture.completedFuture(webSocket);
         }
+        return currentSender.send(text);
     }
 
     private void close() {
