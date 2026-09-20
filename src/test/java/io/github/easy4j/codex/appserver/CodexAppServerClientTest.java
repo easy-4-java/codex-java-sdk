@@ -46,6 +46,30 @@ class CodexAppServerClientTest {
         assertEquals(1000, config.getMaxSessionMappings());
     }
 
+
+    @Test
+    void shouldAcceptInjectedThreadMappingStore() {
+        ThreadMappingStore store = new ThreadMappingStore() {
+            @Override
+            public String get(String sessionKey) {
+                return null;
+            }
+
+            @Override
+            public void put(String sessionKey, String threadId) {
+            }
+
+            @Override
+            public void remove(String sessionKey) {
+            }
+        };
+
+        try (CodexAppServerClient client =
+                new CodexAppServerClient(configWithUrl("ws://localhost:8081"), store)) {
+            assertNotNull(client);
+        }
+    }
+
     @Test
     void shouldRejectNullRequestAndBlankPrompt() {
         try (CodexAppServerClient client = new CodexAppServerClient(configWithUrl("ws://localhost:8081"))) {

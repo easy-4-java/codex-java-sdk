@@ -63,10 +63,69 @@ class CodexAppServerClientE2ETest {
 
             assertEquals("th_e2e", result.getThreadId());
             assertEquals("你好世界", result.getContent());
-            assertEquals("stop", result.getFinishReason());
+            assertEquals("completed", result.getFinishReason());
             assertEquals(List.of("你好", "世界"), deltas);
             assertTrue(server.authorizationSeen(), "WebSocket handshake must carry the bearer token");
-            assertEquals("thread/start", methodOf(server.receivedFrames().get(0)));
+            // 真实协议（codex ≥0.14x）：turn 前必须先 initialize 握手
+            assertEquals("initialize", methodOf(server.receivedFrames().get(0)));
+            assertTrue(methodsOf(server).contains("thread/start"),
+                    "turn must issue thread/start after the initialize handshake");
+        }
+    }
+
+
+    @Test
+    void shouldSerializeConcurrentTurnsForSameSessionKey() throws Exception {
+        try (FakeCodexAppServer server = new FakeCodexAppServer();
+                CodexAppServerClient client = new CodexAppServerClient(configFor(server))) {
+            server.holdTurnCompletions();
+
+            java.util.concurrent.CompletableFuture<AppServerTurnResult> first =
+                    client.runTurnAsync(AppServerTurnRequest.builder()
+                            .prompt("first")
+                            .sessionKey("chat-serial")
+                            .build());
+            assertTrue(server.awaitTurnStarts(1, 2_000), "first turn must reach server");
+
+            java.util.concurrent.CompletableFuture<AppServerTurnResult> second =
+                    client.runTurnAsync(AppServerTurnRequest.builder()
+                            .prompt("second")
+                            .sessionKey("chat-serial")
+                            .build());
+
+            assertFalse(server.awaitTurnStarts(2, 750),
+                    "second same-session turn must not start while first is active");
+
+            server.releaseTurnCompletions();
+            first.get(5, TimeUnit.SECONDS);
+            second.get(5, TimeUnit.SECONDS);
+            assertEquals(2, server.turnStartCount());
+        }
+    }
+
+    @Test
+    void shouldAllowConcurrentTurnsForDifferentSessionKeys() throws Exception {
+        try (FakeCodexAppServer server = new FakeCodexAppServer();
+                CodexAppServerClient client = new CodexAppServerClient(configFor(server))) {
+            server.holdTurnCompletions();
+
+            java.util.concurrent.CompletableFuture<AppServerTurnResult> first =
+                    client.runTurnAsync(AppServerTurnRequest.builder()
+                            .prompt("first")
+                            .sessionKey("chat-a")
+                            .build());
+            java.util.concurrent.CompletableFuture<AppServerTurnResult> second =
+                    client.runTurnAsync(AppServerTurnRequest.builder()
+                            .prompt("second")
+                            .sessionKey("chat-b")
+                            .build());
+
+            assertTrue(server.awaitTurnStarts(2, 2_000),
+                    "different sessions must be able to run concurrently");
+
+            server.releaseTurnCompletions();
+            first.get(5, TimeUnit.SECONDS);
+            second.get(5, TimeUnit.SECONDS);
         }
     }
 
@@ -168,8 +227,12 @@ class CodexAppServerClientE2ETest {
             List<String> methods = server.receivedFrames().stream()
                     .map(this::methodOf)
                     .toList();
-            assertTrue(methods.contains("initialize"), "generic RPC calls must open with the initialize handshake");
-            assertTrue(methods.contains("initialized"), "initialize must be followed by the initialized notification");
+            assertTrue(methods.size() >= 3, "initialize handshake and business request must all be present");
+            assertEquals("initialize", methods.get(0));
+            assertEquals("notifications/initialized", methods.get(1),
+                    "initialize response must be acknowledged with the official notification name");
+            assertEquals("thread/list", methods.get(2),
+                    "business RPC must follow the initialized acknowledgement");
         }
     }
 

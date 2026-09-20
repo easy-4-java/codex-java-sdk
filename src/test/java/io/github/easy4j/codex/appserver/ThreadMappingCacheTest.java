@@ -42,6 +42,18 @@ class ThreadMappingCacheTest {
         assertEquals(2, cache.size());
     }
 
+
+    @Test
+    void shouldRemoveMapping() {
+        ThreadMappingCache cache = new ThreadMappingCache(10);
+        cache.put("s1", "th_1");
+
+        cache.remove("s1");
+
+        assertNull(cache.get("s1"));
+        assertEquals(0, cache.size());
+    }
+
     @Test
     void shouldReturnNullForUnknownKey() {
         ThreadMappingCache cache = new ThreadMappingCache(10);
