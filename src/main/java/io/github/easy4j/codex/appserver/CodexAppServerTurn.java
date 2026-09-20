@@ -68,7 +68,7 @@ class CodexAppServerTurn implements WebSocket.Listener {
     private final AppServerTurnRequest request;
     private final CodexAppServerConfig config;
     private final ObjectMapper objectMapper;
-    private final ThreadMappingCache threadBySession;
+    private final ThreadMappingStore threadBySession;
     private final HttpClient httpClient;
     private final CompletableFuture<AppServerTurnResult> future = new CompletableFuture<>();
     private final Map<Long, CompletableFuture<JsonNode>> pendingRpcs = new ConcurrentHashMap<>();
@@ -87,7 +87,7 @@ class CodexAppServerTurn implements WebSocket.Listener {
     CodexAppServerTurn(AppServerTurnRequest request,
                        CodexAppServerConfig config,
                        ObjectMapper objectMapper,
-                       ThreadMappingCache threadBySession,
+                       ThreadMappingStore threadBySession,
                        HttpClient httpClient) {
         this.request = Objects.requireNonNull(request, "request");
         this.config = Objects.requireNonNull(config, "config");
