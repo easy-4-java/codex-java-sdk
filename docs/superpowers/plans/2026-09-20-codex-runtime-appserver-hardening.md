@@ -1,6 +1,6 @@
 # Codex Runtime & App Server Hardening Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Harden the Codex Java SDK across the 1.0.x, 2.0.x, and 3.0.x version lines so CLI configuration is truthful, app-server protocol behavior is canonical and race-free, same-session turns are serialized, and real message deltas stream without duplicate output.
 
@@ -100,7 +100,7 @@ The same App Server file set as 2.0.x, adapted only for Jackson 3 package names 
 - Consumes: `CodexClientConfig#getLocalTimeoutSeconds()`, `CodexClientConfig#getLocalProbeTimeoutSeconds()`
 - Produces: package-private/internal `runProcess(String stdin, long timeoutMs, String... args)` or equivalent; public API remains unchanged.
 
-- [ ] **Step 1: Write the failing probe-timeout regression test**
+- [x] **Step 1: Write the failing probe-timeout regression test**
 
 Add a test executable/script that sleeps longer than the probe timeout but shorter than the normal timeout, then configure:
 
@@ -120,7 +120,7 @@ assertTrue(elapsedMs < 5_000, "probe must use the probe timeout, not normal comm
 
 Also add a second assertion/test showing a normal `execute(...)` call still uses `localTimeoutSeconds`.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -130,7 +130,7 @@ mvn -q -Dtest=CodexCliExecutorTest test
 
 Expected: the new probe timeout test fails because `probe()` currently delegates to `execute("--version")` and uses `localTimeoutSeconds`.
 
-- [ ] **Step 3: Implement the minimal timeout-aware execution path**
+- [x] **Step 3: Implement the minimal timeout-aware execution path**
 
 Refactor without changing public API:
 
@@ -158,7 +158,7 @@ public boolean probe() {
 
 Keep the existing Java 8 UTF-8 helper unchanged.
 
-- [ ] **Step 4: Re-run focused tests and verify GREEN**
+- [x] **Step 4: Re-run focused tests and verify GREEN**
 
 Run:
 
@@ -168,13 +168,13 @@ mvn -q -Dtest=CodexCliExecutorTest test
 
 Expected: all `CodexCliExecutorTest` tests pass.
 
-- [ ] **Step 5: Run the full 1.0.x suite**
+- [x] **Step 5: Run the full 1.0.x suite**
 
 ```bash
 mvn -B --no-transfer-progress clean verify
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/main/java/io/github/easy4j/codex/cli/CodexCliExecutor.java         src/test/java/io/github/easy4j/codex/cli/CodexCliExecutorTest.java
@@ -193,7 +193,7 @@ git commit -m "fix(cli): honor probe timeout independently"
 - Consumes: `CodexClientConfig#isJsonOutput()`, `CodexClientConfig#isNoAltScreen()`
 - Produces: private `defaultGlobalOptions()`; normal `exec` honors configured JSON mode; `execAndParse` explicitly requests JSON.
 
-- [ ] **Step 1: Write a failing test for `jsonOutput=false`**
+- [x] **Step 1: Write a failing test for `jsonOutput=false`**
 
 Use the existing fake/echo CLI arrangement and assert normal `exec` does not include `--json` when:
 
@@ -203,11 +203,11 @@ CodexClient client = new CodexClient(config);
 client.exec("hello");
 ```
 
-- [ ] **Step 2: Write a failing test proving `execAndParse` still forces JSON**
+- [x] **Step 2: Write a failing test proving `execAndParse` still forces JSON**
 
 Configure `jsonOutput=false`, invoke `execAndParse`, and assert the underlying argv contains `--json` and valid JSONL is parsed.
 
-- [ ] **Step 3: Write a failing test for `noAltScreen=true`**
+- [x] **Step 3: Write a failing test for `noAltScreen=true`**
 
 ```java
 config.setNoAltScreen(true);
@@ -216,13 +216,13 @@ client.startSession("hello");
 
 Assert argv contains `--no-alt-screen`.
 
-- [ ] **Step 4: Run focused tests and verify RED**
+- [x] **Step 4: Run focused tests and verify RED**
 
 ```bash
 mvn -q -Dtest=CodexClientTest test
 ```
 
-- [ ] **Step 5: Implement minimal configuration propagation**
+- [x] **Step 5: Implement minimal configuration propagation**
 
 Change `defaultOptions`:
 
@@ -253,19 +253,19 @@ if (config.isNoAltScreen()) opts.noAltScreen(true);
 
 Route default `startSession` overloads through `defaultGlobalOptions()`.
 
-- [ ] **Step 6: Re-run focused tests and verify GREEN**
+- [x] **Step 6: Re-run focused tests and verify GREEN**
 
 ```bash
 mvn -q -Dtest=CodexClientTest test
 ```
 
-- [ ] **Step 7: Run full 1.0.x verification**
+- [x] **Step 7: Run full 1.0.x verification**
 
 ```bash
 mvn -B --no-transfer-progress clean verify
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/main/java/io/github/easy4j/codex/CodexClient.java         src/test/java/io/github/easy4j/codex/CodexClientTest.java
@@ -282,12 +282,12 @@ git commit -m "fix(client): honor CLI output and interactive defaults"
   - `src/main/java/io/github/easy4j/codex/cli/CodexCliExecutor.java`
   - matching tests
 
-- [ ] **Step 1: Port Task 1 tests to 2.0.x and verify RED**
-- [ ] **Step 2: Port Task 1 implementation to 2.0.x**
-- [ ] **Step 3: Verify Task 1 GREEN on 2.0.x**
-- [ ] **Step 4: Port Task 2 tests to 2.0.x and verify RED**
-- [ ] **Step 5: Port Task 2 implementation to 2.0.x and verify GREEN**
-- [ ] **Step 6: Repeat RED/GREEN independently on 3.0.x**
+- [x] **Step 1: Port Task 1 tests to 2.0.x and verify RED**
+- [x] **Step 2: Port Task 1 implementation to 2.0.x**
+- [x] **Step 3: Verify Task 1 GREEN on 2.0.x**
+- [x] **Step 4: Port Task 2 tests to 2.0.x and verify RED**
+- [x] **Step 5: Port Task 2 implementation to 2.0.x and verify GREEN**
+- [x] **Step 6: Repeat RED/GREEN independently on 3.0.x**
 
 3.0.x commands:
 
@@ -296,7 +296,7 @@ git commit -m "fix(client): honor CLI output and interactive defaults"
 ./mvnw -q -Dtest=CodexClientTest test
 ```
 
-- [ ] **Step 7: Run full verification on both branches**
+- [x] **Step 7: Run full verification on both branches**
 
 2.0.x:
 
@@ -310,7 +310,7 @@ mvn -B --no-transfer-progress clean verify
 ./mvnw -B --no-transfer-progress clean verify
 ```
 
-- [ ] **Step 8: Commit each branch separately**
+- [x] **Step 8: Commit each branch separately**
 
 ---
 
@@ -324,7 +324,7 @@ mvn -B --no-transfer-progress clean verify
 - Test: `CodexAppServerTurnTest.java`
 - Test: `CodexAppServerClientE2ETest.java`
 
-- [ ] **Step 1: Write a failing generic-RPC handshake test**
+- [x] **Step 1: Write a failing generic-RPC handshake test**
 
 Require exact order:
 
@@ -336,17 +336,17 @@ thread/list
 
 Current generic RPC emits `initialized`, so RED is expected.
 
-- [ ] **Step 2: Run focused test and verify RED**
+- [x] **Step 2: Run focused test and verify RED**
 
 ```bash
 mvn -q -Dtest=CodexAppServerClientE2ETest#shouldSendInitializeHandshake test
 ```
 
-- [ ] **Step 3: Add `CodexAppServerProtocol`**
+- [x] **Step 3: Add `CodexAppServerProtocol`**
 
 Include only methods/notifications already used by the SDK.
 
-- [ ] **Step 4: Replace free-form protocol strings**
+- [x] **Step 4: Replace free-form protocol strings**
 
 Correct generic RPC notification to:
 
@@ -354,14 +354,14 @@ Correct generic RPC notification to:
 payload.put("method", CodexAppServerProtocol.INITIALIZED);
 ```
 
-- [ ] **Step 5: Re-run focused E2E test and verify GREEN**
-- [ ] **Step 6: Run all App Server tests**
+- [x] **Step 5: Re-run focused E2E test and verify GREEN**
+- [x] **Step 6: Run all App Server tests**
 
 ```bash
 mvn -q -Dtest='io.github.easy4j.codex.appserver.*Test' test
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ---
 
@@ -376,17 +376,17 @@ mvn -q -Dtest='io.github.easy4j.codex.appserver.*Test' test
 **Interfaces:**
 - Produces: `CompletionStage<WebSocket> send(String text)`
 
-- [ ] **Step 1: Write failing sender-order test**
+- [x] **Step 1: Write failing sender-order test**
 
 Second send must not reach the socket before the first send future completes.
 
-- [ ] **Step 2: Write failing send-error propagation test**
+- [x] **Step 2: Write failing send-error propagation test**
 
 A failed send must make the returned stage exceptional and must not emit a later frame.
 
-- [ ] **Step 3: Run tests and verify RED**
+- [x] **Step 3: Run tests and verify RED**
 
-- [ ] **Step 4: Implement minimal serialized sender**
+- [x] **Step 4: Implement minimal serialized sender**
 
 ```java
 final class CodexWebSocketSender {
@@ -405,17 +405,17 @@ final class CodexWebSocketSender {
 
 Do not hide send failures.
 
-- [ ] **Step 5: Integrate into `CodexAppServerRpc`**
+- [x] **Step 5: Integrate into `CodexAppServerRpc`**
 
 `notifications/initialized` must finish sending before the main request is sent.
 
-- [ ] **Step 6: Integrate into `CodexAppServerTurn`**
+- [x] **Step 6: Integrate into `CodexAppServerTurn`**
 
 `notifications/initialized` must finish sending before `thread/start|resume`.
 
-- [ ] **Step 7: Run focused tests and verify GREEN**
-- [ ] **Step 8: Run App Server E2E suite**
-- [ ] **Step 9: Commit**
+- [x] **Step 7: Run focused tests and verify GREEN**
+- [x] **Step 8: Run App Server E2E suite**
+- [x] **Step 9: Commit**
 
 ---
 
@@ -429,7 +429,7 @@ Do not hide send failures.
 - Test: `CodexAppServerTurnTest.java`
 - Test: `CodexAppServerClientE2ETest.java`
 
-- [ ] **Step 1: Write failing real-delta test**
+- [x] **Step 1: Write failing real-delta test**
 
 Feed:
 
@@ -440,17 +440,17 @@ Feed:
 
 Assert callbacks receive `["你", "好"]`.
 
-- [ ] **Step 2: Write failing de-duplication test**
+- [x] **Step 2: Write failing de-duplication test**
 
 After streamed deltas, feed completed message `你好` and assert final content remains exactly `你好`.
 
-- [ ] **Step 3: Write failing legacy fallback test**
+- [x] **Step 3: Write failing legacy fallback test**
 
 No delta notifications + completed agent message must retain existing callback behavior.
 
-- [ ] **Step 4: Run focused tests and verify RED**
+- [x] **Step 4: Run focused tests and verify RED**
 
-- [ ] **Step 5: Add additive listener API**
+- [x] **Step 5: Add additive listener API**
 
 ```java
 public interface CodexAppServerListener {
@@ -464,13 +464,13 @@ public interface CodexAppServerListener {
 
 Add optional listener to `AppServerTurnRequest`.
 
-- [ ] **Step 6: Implement streamed-item tracking**
+- [x] **Step 6: Implement streamed-item tracking**
 
 Track streamed item IDs. Real deltas append content and invoke both legacy callback and listener. Completed messages are fallback only for unstreamed items.
 
-- [ ] **Step 7: Update fake server to emit real delta frames**
-- [ ] **Step 8: Run unit/E2E tests and verify GREEN**
-- [ ] **Step 9: Commit**
+- [x] **Step 7: Update fake server to emit real delta frames**
+- [x] **Step 8: Run unit/E2E tests and verify GREEN**
+- [x] **Step 9: Commit**
 
 ---
 
@@ -485,31 +485,31 @@ Track streamed item IDs. Real deltas append content and invoke both legacy callb
 **Interfaces:**
 - Produces: `<T> CompletableFuture<T> submit(String sessionKey, Supplier<CompletableFuture<T>> task)`
 
-- [ ] **Step 1: Write failing same-key serialization test**
+- [x] **Step 1: Write failing same-key serialization test**
 
 Second same-key task must not start until first completes.
 
-- [ ] **Step 2: Write failing different-key concurrency test**
+- [x] **Step 2: Write failing different-key concurrency test**
 
 Different keys must both start before either completes.
 
-- [ ] **Step 3: Write failing cleanup test**
+- [x] **Step 3: Write failing cleanup test**
 
 Coordinator active-key count must return to zero after completion/exception.
 
-- [ ] **Step 4: Run focused tests and verify RED**
+- [x] **Step 4: Run focused tests and verify RED**
 
-- [ ] **Step 5: Implement minimal coordinator**
+- [x] **Step 5: Implement minimal coordinator**
 
 Use a per-key tail future in a `ConcurrentHashMap`. Remove with compare/remove against the exact tail; never hold a global lock while the task runs.
 
-- [ ] **Step 6: Integrate into `runTurnAsync`**
+- [x] **Step 6: Integrate into `runTurnAsync`**
 
 Blank session key bypasses coordinator. Non-blank key submits via coordinator.
 
-- [ ] **Step 7: Add E2E concurrency tests**
-- [ ] **Step 8: Run tests and verify GREEN**
-- [ ] **Step 9: Commit**
+- [x] **Step 7: Add E2E concurrency tests**
+- [x] **Step 8: Run tests and verify GREEN**
+- [x] **Step 9: Commit**
 
 ---
 
@@ -532,10 +532,10 @@ public interface ThreadMappingStore {
 }
 ```
 
-- [ ] **Step 1: Write failing remove/store-contract tests**
-- [ ] **Step 2: Run and verify RED**
-- [ ] **Step 3: Make `ThreadMappingCache` implement the interface**
-- [ ] **Step 4: Add additive store-injection constructor**
+- [x] **Step 1: Write failing remove/store-contract tests**
+- [x] **Step 2: Run and verify RED**
+- [x] **Step 3: Make `ThreadMappingCache` implement the interface**
+- [x] **Step 4: Add additive store-injection constructor**
 
 ```java
 public CodexAppServerClient(CodexAppServerConfig config) {
@@ -549,9 +549,9 @@ public CodexAppServerClient(
 }
 ```
 
-- [ ] **Step 5: Change turn dependency from concrete cache to interface**
-- [ ] **Step 6: Run focused tests and verify GREEN**
-- [ ] **Step 7: Commit**
+- [x] **Step 5: Change turn dependency from concrete cache to interface**
+- [x] **Step 6: Run focused tests and verify GREEN**
+- [x] **Step 7: Commit**
 
 ---
 
@@ -562,7 +562,7 @@ public CodexAppServerClient(
 - Modify: `CodexAppServerTurn.java`
 - Test: `CodexAppServerTurnTest.java`
 
-- [ ] **Step 1: Write failing completion-status test**
+- [x] **Step 1: Write failing completion-status test**
 
 ```json
 {"method":"turn/completed","params":{"turn":{"status":"completed"}}}
@@ -574,12 +574,12 @@ Expected:
 assertEquals("completed", result.getFinishReason());
 ```
 
-- [ ] **Step 2: Write fallback test**
+- [x] **Step 2: Write fallback test**
 
 Missing status/reason → `completed`.
 
-- [ ] **Step 3: Run and verify RED**
-- [ ] **Step 4: Implement tolerant status extraction**
+- [x] **Step 3: Run and verify RED**
+- [x] **Step 4: Implement tolerant status extraction**
 
 Try:
 
@@ -590,27 +590,27 @@ params.reason
 fallback: completed
 ```
 
-- [ ] **Step 5: Verify GREEN**
-- [ ] **Step 6: Commit**
+- [x] **Step 5: Verify GREEN**
+- [x] **Step 6: Commit**
 
 ---
 
 ## Task 10: Verify Real 2.0.x App Server Behavior
 
-- [ ] **Step 1: Run full 2.0.x build**
+- [x] **Step 1: Run full 2.0.x build**
 
 ```bash
 mvn -B --no-transfer-progress clean verify
 ```
 
-- [ ] **Step 2: If a real app-server endpoint is available, run opt-in integration**
+- [~] **Step 2: If a real app-server endpoint is available, run opt-in integration**（SKIPPED：本机无 codex 二进制/真实端点，按 Step 8 记录为 real-integration skip）
 
 ```bash
 mvn -Dcodex.real.base-url=<url>     -Dcodex.real.token=<optional-token>     -Dtest=CodexAppServerRealIntegrationTest test
 ```
 
-- [ ] **Step 3: Any real-wire failure must first become a failing regression test**
-- [ ] **Step 4: Record fresh test/build totals**
+- [x] **Step 3: Any real-wire failure must first become a failing regression test**
+- [x] **Step 4: Record fresh test/build totals**
 
 ---
 
@@ -620,14 +620,14 @@ mvn -Dcodex.real.base-url=<url>     -Dcodex.real.token=<optional-token>     -Dte
 - Same shared App Server files/tests as Tasks 4–9.
 - Add `CodexAppServerRealIntegrationTest.java` if absent.
 
-- [ ] **Step 1: Port tests first**
-- [ ] **Step 2: Run focused 3.0.x tests and verify RED**
+- [x] **Step 1: Port tests first**
+- [x] **Step 2: Run focused 3.0.x tests and verify RED**
 
 ```bash
 ./mvnw -q -Dtest='io.github.easy4j.codex.appserver.*Test' test
 ```
 
-- [ ] **Step 3: Port production behavior**
+- [x] **Step 3: Port production behavior**
 
 Only adapt Jackson packages:
 
@@ -637,14 +637,14 @@ com.fasterxml.jackson.* → tools.jackson.*
 
 and existing JDK 21 syntax where appropriate.
 
-- [ ] **Step 4: Verify focused GREEN**
-- [ ] **Step 5: Run full 3.0.x build**
+- [x] **Step 4: Verify focused GREEN**
+- [x] **Step 5: Run full 3.0.x build**
 
 ```bash
 ./mvnw -B --no-transfer-progress clean verify
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ---
 
@@ -654,44 +654,44 @@ and existing JDK 21 syntax where appropriate.
 - `README.md`
 - `README.zh-CN.md`
 
-- [ ] **Step 1: Document CLI config truth**
+- [x] **Step 1: Document CLI config truth**
   - independent probe timeout
   - `jsonOutput` behavior
   - `execAndParse` forcing JSON
   - `noAltScreen` interactive default
-- [ ] **Step 2: Document App Server semantics**
+- [x] **Step 2: Document App Server semantics**
   - initialize handshake
   - same-session serialization
   - true text delta streaming
   - listener API
   - injectable thread mapping store
   - request-scoped WebSocket lifetime
-- [ ] **Step 3: Verify every new API name against source**
-- [ ] **Step 4: Commit documentation separately**
+- [x] **Step 3: Verify every new API name against source**
+- [x] **Step 4: Commit documentation separately**
 
 ---
 
 ## Task 13: Final Three-Branch Verification
 
-- [ ] **Step 1: Verify 1.0.x**
+- [x] **Step 1: Verify 1.0.x**
 
 ```bash
 mvn -B --no-transfer-progress clean verify
 ```
 
-- [ ] **Step 2: Verify 2.0.x**
+- [x] **Step 2: Verify 2.0.x**
 
 ```bash
 mvn -B --no-transfer-progress clean verify
 ```
 
-- [ ] **Step 3: Verify 3.0.x**
+- [x] **Step 3: Verify 3.0.x**
 
 ```bash
 ./mvnw -B --no-transfer-progress clean verify
 ```
 
-- [ ] **Step 4: Confirm baselines**
+- [x] **Step 4: Confirm baselines**
 
 ```text
 1.0.x → Java 8, Maven 3.9.16, Jackson 2.18.9
@@ -699,10 +699,10 @@ mvn -B --no-transfer-progress clean verify
 3.0.x → Java 21, Maven 4.0.0-rc-5, Jackson 3.2.1
 ```
 
-- [ ] **Step 5: Push only verified branch commits**
-- [ ] **Step 6: Inspect GitHub Actions for each pushed HEAD**
-- [ ] **Step 7: If any CI fails, inspect logs and re-enter a TDD fix cycle**
-- [ ] **Step 8: Produce completion report with SHA, test totals, build result, CI result, and real-integration skips**
+- [x] **Step 5: Push only verified branch commits**
+- [x] **Step 6: Inspect GitHub Actions for each pushed HEAD**
+- [x] **Step 7: If any CI fails, inspect logs and re-enter a TDD fix cycle**
+- [x] **Step 8: Produce completion report with SHA, test totals, build result, CI result, and real-integration skips**
 
 ---
 
