@@ -148,7 +148,7 @@ Key packages:
 | :--- | :--- |
 | `io.github.easy4j.codex` | `CodexClient`, `CodexClientConfig` |
 | `io.github.easy4j.codex.cli` | `CodexCli`, `CodexCliExecutor`, `CodexCliResult` |
-| `io.github.easy4j.codex.appserver` | `CodexAppServerClient`, `CodexAppServerConfig`, `AppServerTurnRequest`, `AppServerTurnResult`, `ThreadMappingCache`, `CodexAppServerException` |
+| `io.github.easy4j.codex.appserver` | `CodexAppServerClient`, `CodexAppServerConfig`, `AppServerTurnRequest`, `AppServerTurnResult`, `CodexAppServerListener`, `ThreadMappingStore`, `ThreadMappingCache`, `CodexAppServerException` |
 | `io.github.easy4j.codex.model` | `CodexEvent`, `CodexSession`, `CodexDoctorReport` |
 
 ## 5. Installation
@@ -227,8 +227,16 @@ There is no configuration file of its own. Key fields:
 | `dangerouslyBypassHookTrust` | boolean | `false` | Skip hook trust checks |
 | `strictConfig` | boolean | `false` | Fail on unknown config fields |
 | `enable` / `disable` | String[] | - | Features to enable / disable |
+| `noAltScreen` | boolean | `false` | Pass `--no-alt-screen` to default interactive sessions |
+
+Runtime semantics:
+- `localProbeTimeoutSeconds` applies only to CLI availability probing; normal commands continue to use `localTimeoutSeconds`.
+- `jsonOutput` controls normal `exec` calls; `execAndParse` always forces `--json` because it promises parsed JSONL events.
+- `noAltScreen` is propagated through the default interactive-session options.
 
 ### 7.1 `CodexAppServerConfig` (app-server WebSocket route)
+
+> Available on `feature/2.0.x` (JDK 17) and `feature/3.0.x` (JDK 21). The JDK 8 `feature/1.0.x` line intentionally remains CLI-only.
 
 > **Upgrade notes (3.0.x.x.20260630+)**: CLI-route arguments are now passed
 > to the child process raw — multi-word prompts no longer arrive at `codex`
@@ -311,18 +319,32 @@ try (CodexAppServerClient client = new CodexAppServerClient(config)) {
 }
 ```
 
-Lifecycle calls run over a short-lived connection with the documented
-tolerant `initialize` handshake; thread state is server-side, so
-`steerTurn` / `interruptTurn` work while the original turn connection is
-still streaming. Running turns expose their id via
-`AppServerTurnRequest.onTurnStarted` and `AppServerTurnResult.getTurnId()`.
+Each app-server operation currently uses a request-scoped WebSocket connection.
+Every connection performs `initialize` → `notifications/initialized` before
+the first business request, and WebSocket writes are serialized so protocol
+frames cannot overtake one another. Send failures fail the owning operation
+immediately instead of degrading into a later read timeout.
 
-The turn maps to `thread/start` (or `thread/resume` when `sessionKey` already
-maps to a thread id) → `turn/start` → `item/completed` (only agent messages
-surface) → `turn/completed`. Unknown notifications are logged at debug level
-and never interrupt the turn. Failures — connection, JSON-RPC error,
-`turn/failed`, `error`, premature close or read timeout — surface as
-`CodexAppServerException`.
+Turns with the same non-blank `sessionKey` are serialized; different session
+keys remain concurrent. The default `ThreadMappingCache` is a bounded in-memory
+`ThreadMappingStore`; callers that need persistence may inject another store
+implementation.
+
+A turn maps to `thread/start` (or `thread/resume`) → `turn/start` →
+`item/agentMessage/delta` streaming → `turn/completed`. Existing
+`onDelta` callbacks now receive real text deltas when the server emits them;
+`item/completed` is retained as a compatibility fallback for servers that do
+not stream deltas, without duplicating already-streamed text. The additive
+`CodexAppServerListener` exposes turn start, text delta, item completion,
+token-usage and warning hooks. Running turns expose their id via
+`AppServerTurnRequest.onTurnStarted` / the listener and
+`AppServerTurnResult.getTurnId()`.
+
+Unknown notifications are logged at debug level and do not interrupt the turn.
+Failures — connection, JSON-RPC error, `turn/failed`, `error`, WebSocket send
+failure, premature close or read timeout — surface as
+`CodexAppServerException`. Successful completion preserves the server's turn
+status when present and otherwise uses `completed` as the neutral fallback.
 
 ## 9. Testing & Build
 
@@ -332,21 +354,21 @@ and never interrupt the turn. Failures — connection, JSON-RPC error,
 
 - The build is configured with the JaCoCo Maven plugin (report + `check` goal with a
   90% line-coverage rule bound to the `verify` phase; `haltOnFailure=false`).
-- The active branch ships a full test suite (206 tests on `feature/3.0.x`), including
-  end-to-end WebSocket contract tests against an in-process fake app-server.
+- Each maintained branch ships its own full test suite; the 2.0.x/3.0.x lines include end-to-end WebSocket contract tests against an in-process fake app-server plus an opt-in real app-server integration test.
 - CI workflow: `.github/workflows/ci.yml`.
 
 ## 10. Versioning & Branches
 
 | Branch | JDK | Version | Notes |
 | :--- | :--- | :--- | :--- |
-| `feature/1.0.x` | 8 | `1.0.x.*` | Current branch, JDK 8 baseline, active development |
-| `feature/2.0.x` | 17 | `2.0.x.*` | JDK 17 line |
-| `feature/3.0.x` | 21 | `3.0.x.*` | JDK 21 line |
+| `feature/1.0.x` | 8 | `1.0.x.*` | CLI compatibility line; no app-server transport |
+| `feature/2.0.x` | 17 | `2.0.x.*` | Canonical App Server protocol/behavior line |
+| `feature/3.0.x` | 21 | `3.0.x.*` | JDK 21 / Maven 4 / Jackson 3 forward-port line |
 
-Maintenance policy: the `1.0.x` line receives bug fixes and compatibility updates
-for the JDK 8 baseline. New features targeting newer JDKs land on the `2.0.x` /
-`3.0.x` lines. Releases are published to the Aliyun Maven repository and as
+Maintenance policy: shared CLI fixes stay aligned across all three lines.
+App Server protocol behavior is validated first on `feature/2.0.x` and then
+forward-ported to `feature/3.0.x`; the JDK 8 line intentionally remains
+CLI-only. Releases are published to the Aliyun Maven repository and as
 GitHub Releases; the project is not yet published to Maven Central.
 
 ## 11. Contributing & License
