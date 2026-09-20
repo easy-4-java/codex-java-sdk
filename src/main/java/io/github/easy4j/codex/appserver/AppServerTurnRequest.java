@@ -60,6 +60,12 @@ public class AppServerTurnRequest {
     private Consumer<String> onTurnStarted;
 
     /**
+     * Optional structured listener for turn lifecycle and streaming events.
+     * Existing callbacks remain supported for source compatibility.
+     */
+    private CodexAppServerListener listener;
+
+    /**
      * Returns the session key in a comparable form, or {@code null} when unset.
      *
      * @return the trimmed session key, or {@code null} when blank.

@@ -24,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
@@ -67,24 +68,26 @@ class CodexAppServerTurn implements WebSocket.Listener {
     private final AppServerTurnRequest request;
     private final CodexAppServerConfig config;
     private final ObjectMapper objectMapper;
-    private final ThreadMappingCache threadBySession;
+    private final ThreadMappingStore threadBySession;
     private final HttpClient httpClient;
     private final CompletableFuture<AppServerTurnResult> future = new CompletableFuture<>();
     private final Map<Long, CompletableFuture<JsonNode>> pendingRpcs = new ConcurrentHashMap<>();
     private final AtomicLong rpcIds = new AtomicLong();
     private final StringBuilder content = new StringBuilder();
     private final StringBuilder frameBuffer = new StringBuilder();
+    private final Set<String> streamedAgentItemIds = ConcurrentHashMap.newKeySet();
     /** Records outgoing RPC payloads; without a socket they are only recorded, for contract tests. */
     private final List<String> sentMessages = new ArrayList<>();
 
     private volatile WebSocket webSocket;
+    private volatile CodexWebSocketSender sender;
     private volatile String threadId;
     private volatile String turnId;
 
     CodexAppServerTurn(AppServerTurnRequest request,
                        CodexAppServerConfig config,
                        ObjectMapper objectMapper,
-                       ThreadMappingCache threadBySession,
+                       ThreadMappingStore threadBySession,
                        HttpClient httpClient) {
         this.request = Objects.requireNonNull(request, "request");
         this.config = Objects.requireNonNull(config, "config");
@@ -130,23 +133,45 @@ class CodexAppServerTurn implements WebSocket.Listener {
     @Override
     public void onOpen(WebSocket socket) {
         this.webSocket = socket;
+        this.sender = new CodexWebSocketSender(socket);
         socket.request(1);
         begin();
     }
 
     /**
-     * Sends the first RPC: {@code thread/resume} when the session key already
-     * maps to a thread id, {@code thread/start} otherwise.
+     * Sends the JSON-RPC lifecycle handshake first — real codex app-servers
+     * (verified against 0.154.0) reject any request before
+     * {@code initialize} with {@code -32600 Not initialized} — then starts or
+     * resumes the thread.
      *
      * <p>Split from {@link #onOpen(WebSocket)} so contract tests can drive the
      * turn without a socket; requests are only recorded in
      * {@link #sentMessages} when no socket is attached.</p>
      */
     void begin() {
+        CompletableFuture<JsonNode> initRpc = newRpc(CodexAppServerProtocol.INITIALIZE, buildInitializeParams());
+        initRpc.thenAccept(result ->
+                sendNotification(CodexAppServerProtocol.INITIALIZED)
+                        .whenComplete((ignored, sendError) -> {
+                            if (Objects.nonNull(sendError)) {
+                                completeError(new CodexAppServerException(
+                                        "Codex initialized notification send failed",
+                                        unwrap(sendError)));
+                                return;
+                            }
+                            startOrResumeThread();
+                        })
+        ).exceptionally(error -> {
+            completeError(unwrap(error));
+            return null;
+        });
+    }
+
+    private void startOrResumeThread() {
         String sessionKey = request.normalizedSessionKey();
         String previousThreadId = Objects.isNull(sessionKey) ? null : threadBySession.get(sessionKey);
         boolean resume = hasText(previousThreadId);
-        CompletableFuture<JsonNode> rpc = newRpc(resume ? "thread/resume" : "thread/start",
+        CompletableFuture<JsonNode> rpc = newRpc(resume ? CodexAppServerProtocol.THREAD_RESUME : CodexAppServerProtocol.THREAD_START,
                 buildThreadStartParams(resume ? previousThreadId : null));
         rpc.thenAccept(result -> {
             threadId = extractThreadId(result);
@@ -154,7 +179,7 @@ class CodexAppServerTurn implements WebSocket.Listener {
                 completeError(new CodexAppServerException("Codex thread/start returned no threadId"));
                 return;
             }
-            newRpc("turn/start", buildTurnStartParams(threadId));
+            newRpc(CodexAppServerProtocol.TURN_START, buildTurnStartParams(threadId));
         }).exceptionally(error -> {
             completeError(unwrap(error));
             return null;
@@ -222,12 +247,13 @@ class CodexAppServerTurn implements WebSocket.Listener {
         String method = node.path("method").asText("");
         JsonNode params = node.path("params");
         switch (method) {
-            case "turn/started" -> onTurnStarted(params);
-            case "item/completed" -> onItemCompleted(params);
-            case "turn/completed" -> onTurnCompleted(params);
-            case "turn/failed" -> completeError(new CodexAppServerException(
+            case CodexAppServerProtocol.TURN_STARTED -> onTurnStarted(params);
+            case CodexAppServerProtocol.AGENT_MESSAGE_DELTA -> onAgentMessageDelta(params);
+            case CodexAppServerProtocol.ITEM_COMPLETED -> onItemCompleted(params);
+            case CodexAppServerProtocol.TURN_COMPLETED -> onTurnCompleted(params);
+            case CodexAppServerProtocol.TURN_FAILED -> completeError(new CodexAppServerException(
                     "Codex turn failed: " + params.path("message").asText("unknown")));
-            case "error" -> completeError(new CodexAppServerException(
+            case CodexAppServerProtocol.ERROR -> completeError(new CodexAppServerException(
                     "Codex server error: " + params.toString()));
             default -> log.debug("Ignored Codex notification: method={}", method);
         }
@@ -240,6 +266,28 @@ class CodexAppServerTurn implements WebSocket.Listener {
             if (Objects.nonNull(request.getOnTurnStarted())) {
                 request.getOnTurnStarted().accept(reported);
             }
+            if (Objects.nonNull(request.getListener())) {
+                request.getListener().onTurnStarted(reported);
+            }
+        }
+    }
+
+    private void onAgentMessageDelta(JsonNode params) {
+        String delta = firstText(params, "delta");
+        if (!hasText(delta)) {
+            return;
+        }
+        String itemId = firstText(params, "itemId", "item_id");
+        if (hasText(itemId)) {
+            streamedAgentItemIds.add(itemId);
+        }
+        String applied = truncateToContentCap(delta);
+        content.append(applied);
+        if (!applied.isEmpty() && Objects.nonNull(request.getOnDelta())) {
+            request.getOnDelta().accept(applied);
+        }
+        if (!applied.isEmpty() && Objects.nonNull(request.getListener())) {
+            request.getListener().onTextDelta(applied);
         }
     }
 
@@ -252,6 +300,13 @@ class CodexAppServerTurn implements WebSocket.Listener {
         }
         String text = firstText(item, "text", "content");
         if (!hasText(text)) {
+            return;
+        }
+        String itemId = firstText(item, "id", "itemId", "item_id");
+        if (Objects.nonNull(request.getListener())) {
+            request.getListener().onItemCompleted(type, text);
+        }
+        if (hasText(itemId) && streamedAgentItemIds.contains(itemId)) {
             return;
         }
         String applied = truncateToContentCap(text);
@@ -289,9 +344,17 @@ class CodexAppServerTurn implements WebSocket.Listener {
                 .threadId(threadId)
                 .turnId(turnId)
                 .content(finalContent)
-                .finishReason("stop")
+                .finishReason(extractFinishReason(params))
                 .build());
         close();
+    }
+
+    private String extractFinishReason(JsonNode params) {
+        String status = firstText(params.path("turn"), "status");
+        if (!hasText(status)) {
+            status = firstText(params, "status", "reason");
+        }
+        return hasText(status) ? status : "completed";
     }
 
     private CompletableFuture<JsonNode> newRpc(String method, Map<String, Object> params) {
@@ -307,7 +370,13 @@ class CodexAppServerTurn implements WebSocket.Listener {
             completeError(unwrap(error));
             return null;
         });
-        sendText(toJson(payload));
+        sendText(toJson(payload)).whenComplete((ignored, sendError) -> {
+            if (Objects.nonNull(sendError)) {
+                rpc.completeExceptionally(new CodexAppServerException(
+                        "Codex WebSocket send failed for " + method,
+                        unwrap(sendError)));
+            }
+        });
         return rpc;
     }
 
@@ -317,6 +386,22 @@ class CodexAppServerTurn implements WebSocket.Listener {
             params.put("threadId", resumeThreadId);
         }
         return params;
+    }
+
+    Map<String, Object> buildInitializeParams() {
+        Map<String, Object> clientInfo = new LinkedHashMap<>();
+        clientInfo.put("name", "easy4j-codex-java-sdk");
+        clientInfo.put("version", "3.0.x");
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("clientInfo", clientInfo);
+        return params;
+    }
+
+    private CompletionStage<WebSocket> sendNotification(String method) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("jsonrpc", "2.0");
+        payload.put("method", method);
+        return sendText(toJson(payload));
     }
 
     Map<String, Object> buildTurnStartParams(String targetThreadId) {
@@ -336,12 +421,13 @@ class CodexAppServerTurn implements WebSocket.Listener {
         }
     }
 
-    private void sendText(String text) {
+    private CompletionStage<WebSocket> sendText(String text) {
         sentMessages.add(text);
-        WebSocket socket = webSocket;
-        if (Objects.nonNull(socket)) {
-            socket.sendText(text, true);
+        CodexWebSocketSender currentSender = sender;
+        if (Objects.isNull(currentSender)) {
+            return CompletableFuture.completedFuture(webSocket);
         }
+        return currentSender.send(text);
     }
 
     private void close() {
@@ -366,7 +452,12 @@ class CodexAppServerTurn implements WebSocket.Listener {
     }
 
     private String extractThreadId(JsonNode result) {
-        String threadId = firstText(result, "threadId", "thread_id");
+        // codex ≥0.14x 将线程对象嵌套在 result.thread（实测 0.154.0 返回
+        // result.thread.id = UUID）；旧版本为顶层 threadId/thread_id。两者都兼容。
+        String threadId = firstText(result.path("thread"), "id", "threadId", "thread_id");
+        if (!hasText(threadId)) {
+            threadId = firstText(result, "threadId", "thread_id");
+        }
         return hasText(threadId) ? threadId : null;
     }
 

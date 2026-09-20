@@ -125,7 +125,7 @@ class CodexAppServerRpc implements WebSocket.Listener {
         clientInfo.put("version", "3.0.x");
         Map<String, Object> initParams = new java.util.LinkedHashMap<>();
         initParams.put("clientInfo", clientInfo);
-        sendRpc(INIT_REQUEST_ID, "initialize", initParams);
+        sendRpc(INIT_REQUEST_ID, CodexAppServerProtocol.INITIALIZE, initParams);
     }
 
     @Override
@@ -236,7 +236,7 @@ class CodexAppServerRpc implements WebSocket.Listener {
         // both back-to-back from inside the onText callback.
         Map<String, Object> payload = new java.util.LinkedHashMap<>();
         payload.put("jsonrpc", "2.0");
-        payload.put("method", "initialized");
+        payload.put("method", CodexAppServerProtocol.INITIALIZED);
         payload.put("params", java.util.Collections.emptyMap());
         socket.sendText(toJson(payload), true).whenComplete((w, error) -> {
             if (Objects.nonNull(error)) {
