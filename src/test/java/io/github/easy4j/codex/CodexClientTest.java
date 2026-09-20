@@ -53,6 +53,9 @@ class CodexClientTest {
     private static final String ECHO_ARGS_SCRIPT =
             Path.of("src", "test", "resources", "echo-args.sh").toAbsolutePath().toString();
 
+    private static final String JSON_FLAG_SCRIPT =
+            Path.of("src", "test", "resources", "json-when-flag.sh").toAbsolutePath().toString();
+
     private static CodexClientConfig echoConfig() {
         CodexClientConfig config = new CodexClientConfig();
         config.setLocalExecutable(ECHO_ARGS_SCRIPT);
