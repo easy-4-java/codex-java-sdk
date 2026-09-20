@@ -73,6 +73,62 @@ class CodexAppServerClientE2ETest {
         }
     }
 
+
+    @Test
+    void shouldSerializeConcurrentTurnsForSameSessionKey() throws Exception {
+        try (FakeCodexAppServer server = new FakeCodexAppServer();
+                CodexAppServerClient client = new CodexAppServerClient(configFor(server))) {
+            server.holdTurnCompletions();
+
+            java.util.concurrent.CompletableFuture<AppServerTurnResult> first =
+                    client.runTurnAsync(AppServerTurnRequest.builder()
+                            .prompt("first")
+                            .sessionKey("chat-serial")
+                            .build());
+            assertTrue(server.awaitTurnStarts(1, 2_000), "first turn must reach server");
+
+            java.util.concurrent.CompletableFuture<AppServerTurnResult> second =
+                    client.runTurnAsync(AppServerTurnRequest.builder()
+                            .prompt("second")
+                            .sessionKey("chat-serial")
+                            .build());
+
+            assertFalse(server.awaitTurnStarts(2, 750),
+                    "second same-session turn must not start while first is active");
+
+            server.releaseTurnCompletions();
+            first.get(5, TimeUnit.SECONDS);
+            second.get(5, TimeUnit.SECONDS);
+            assertEquals(2, server.turnStartCount());
+        }
+    }
+
+    @Test
+    void shouldAllowConcurrentTurnsForDifferentSessionKeys() throws Exception {
+        try (FakeCodexAppServer server = new FakeCodexAppServer();
+                CodexAppServerClient client = new CodexAppServerClient(configFor(server))) {
+            server.holdTurnCompletions();
+
+            java.util.concurrent.CompletableFuture<AppServerTurnResult> first =
+                    client.runTurnAsync(AppServerTurnRequest.builder()
+                            .prompt("first")
+                            .sessionKey("chat-a")
+                            .build());
+            java.util.concurrent.CompletableFuture<AppServerTurnResult> second =
+                    client.runTurnAsync(AppServerTurnRequest.builder()
+                            .prompt("second")
+                            .sessionKey("chat-b")
+                            .build());
+
+            assertTrue(server.awaitTurnStarts(2, 2_000),
+                    "different sessions must be able to run concurrently");
+
+            server.releaseTurnCompletions();
+            first.get(5, TimeUnit.SECONDS);
+            second.get(5, TimeUnit.SECONDS);
+        }
+    }
+
     @Test
     void shouldResumeSameThreadForRepeatedSessionKey() throws Exception {
         try (FakeCodexAppServer server = new FakeCodexAppServer();
