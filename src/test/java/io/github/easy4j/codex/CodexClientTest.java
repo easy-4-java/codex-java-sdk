@@ -64,6 +64,34 @@ class CodexClientTest {
         return new CodexClient(echoConfig());
     }
 
+    private static final class CapturingExecutor extends CodexCliExecutor {
+        private final String stdout;
+        private String[] lastArgs;
+
+        private CapturingExecutor(CodexClientConfig config, String stdout) {
+            super(config);
+            this.stdout = stdout;
+        }
+
+        @Override
+        public CodexCliResult execute(String... args) {
+            this.lastArgs = args;
+            return new CodexCliResult(0, stdout, "");
+        }
+
+        private boolean hasArg(String expected) {
+            if (lastArgs == null) {
+                return false;
+            }
+            for (String arg : lastArgs) {
+                if (expected.equals(arg)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
     // ----------------------------------------------------------------
     // Constructor
     // ----------------------------------------------------------------
@@ -146,6 +174,17 @@ class CodexClientTest {
         String out = result.getStdout();
         assertTrue(out.contains("exec"));
         assertTrue(out.contains("hello"));
+    }
+
+    @Test
+    void shouldHonorJsonOutputFalseForNormalExec() {
+        CodexClientConfig config = echoConfig();
+        config.setJsonOutput(false);
+
+        CodexCliResult result = new CodexClient(config).exec("hello");
+
+        assertFalse(result.getStdout().contains("--json"),
+                "normal exec must honor CodexClientConfig.jsonOutput=false");
     }
 
     @Test
@@ -252,6 +291,22 @@ class CodexClientTest {
     }
 
     @Test
+    void shouldForceJsonForExecAndParseEvenWhenDefaultJsonOutputIsFalse() {
+        CodexClientConfig config = echoConfig();
+        config.setJsonOutput(false);
+        CapturingExecutor executor = new CapturingExecutor(
+                config, "{\"type\":\"message\",\"message\":\"hi\"}");
+        CodexClient client = new CodexClient(config, new CodexCli(executor));
+
+        List<CodexEvent> events = client.execAndParse("hello");
+
+        assertTrue(executor.hasArg("--json"),
+                "execAndParse must force --json independently of the normal exec default");
+        assertEquals(1, events.size());
+        assertEquals("message", events.get(0).getType());
+    }
+
+    @Test
     void shouldParseValidJsonlOutput() throws Exception {
         // Create a custom client that returns valid JSON-Lines
         String jsonl = "{\"type\":\"message\",\"message\":\"hi\"}\n{\"type\":\"done\"}\n";
@@ -276,6 +331,17 @@ class CodexClientTest {
     void shouldDelegateStartSessionWithPrompt() {
         CodexCliResult result = echoClient().startSession("hello");
         assertTrue(result.getStdout().contains("hello"));
+    }
+
+    @Test
+    void shouldPropagateNoAltScreenToDefaultInteractiveSession() {
+        CodexClientConfig config = echoConfig();
+        config.setNoAltScreen(true);
+
+        CodexCliResult result = new CodexClient(config).startSession("hello");
+
+        assertTrue(result.getStdout().contains("--no-alt-screen"),
+                "default interactive session must honor CodexClientConfig.noAltScreen=true");
     }
 
     @Test
