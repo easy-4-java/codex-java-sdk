@@ -33,7 +33,7 @@ import java.util.Objects;
  * @since 3.0.0
  * @see CodexAppServerClient
  */
-public class ThreadMappingCache {
+public class ThreadMappingCache implements ThreadMappingStore {
 
     private final Map<String, String> mappings;
 
@@ -59,6 +59,7 @@ public class ThreadMappingCache {
      * @param key session key; must not be {@code null}.
      * @return the mapped thread id, or {@code null} when absent.
      */
+    @Override
     public synchronized String get(String key) {
         Objects.requireNonNull(key, "key");
         return mappings.get(key);
@@ -70,10 +71,17 @@ public class ThreadMappingCache {
      * @param key      session key; must not be {@code null}.
      * @param threadId Codex thread id; must not be {@code null}.
      */
+    @Override
     public synchronized void put(String key, String threadId) {
         Objects.requireNonNull(key, "key");
         Objects.requireNonNull(threadId, "threadId");
         mappings.put(key, threadId);
+    }
+
+    @Override
+    public synchronized void remove(String key) {
+        Objects.requireNonNull(key, "key");
+        mappings.remove(key);
     }
 
     /**
