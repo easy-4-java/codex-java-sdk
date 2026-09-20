@@ -161,7 +161,8 @@ public class CodexClient implements AutoCloseable {
      *         empty or unparseable.
      */
     public List<CodexEvent> execAndParse(String prompt) {
-        CodexCliResult result = exec(prompt);
+        CodexCli.ExecOptions opts = defaultOptions(prompt).json(true);
+        CodexCliResult result = cli.exec(opts);
         return parseJsonlOutput(result.getStdout());
     }
 
@@ -296,7 +297,7 @@ public class CodexClient implements AutoCloseable {
      * @return the raw CLI invocation result; never {@code null}.
      */
     public CodexCliResult startSession() {
-        return cli.startInteractive();
+        return cli.startInteractive(defaultGlobalOptions(), null);
     }
 
     /**
@@ -306,7 +307,7 @@ public class CodexClient implements AutoCloseable {
      * @return the raw CLI invocation result; never {@code null}.
      */
     public CodexCliResult startSession(String prompt) {
-        return cli.startInteractive(prompt);
+        return cli.startInteractive(defaultGlobalOptions(), prompt);
     }
 
     /**
@@ -1122,7 +1123,7 @@ public class CodexClient implements AutoCloseable {
      * @return a fresh options instance; never {@code null}.
      */
     private CodexCli.ExecOptions defaultOptions(String prompt) {
-        CodexCli.ExecOptions opts = new CodexCli.ExecOptions(prompt).json(true);
+        CodexCli.ExecOptions opts = new CodexCli.ExecOptions(prompt).json(config.isJsonOutput());
         if (config.getDefaultModel() != null) opts.model(config.getDefaultModel());
         if (config.getDefaultSandbox() != null) opts.sandbox(config.getDefaultSandbox());
         if (config.getDefaultApprovalPolicy() != null) opts.approvalPolicy(config.getDefaultApprovalPolicy());
@@ -1143,6 +1144,33 @@ public class CodexClient implements AutoCloseable {
         if (config.isStrictConfig()) opts.strictConfig(true);
         if (config.getEnable() != null) opts.enable(config.getEnable());
         if (config.getDisable() != null) opts.disable(config.getDisable());
+        return opts;
+    }
+
+    /**
+     * Builds global options for the default interactive-session entry points.
+     *
+     * @return a fresh global-options instance populated from client defaults.
+     */
+    private CodexCli.GlobalOptions defaultGlobalOptions() {
+        CodexCli.GlobalOptions opts = new CodexCli.GlobalOptions();
+        if (config.getDefaultModel() != null) opts.model(config.getDefaultModel());
+        if (config.getDefaultSandbox() != null) opts.sandbox(config.getDefaultSandbox());
+        if (config.getDefaultApprovalPolicy() != null) opts.approvalPolicy(config.getDefaultApprovalPolicy());
+        if (config.getDefaultProfile() != null) opts.profile(config.getDefaultProfile());
+        if (config.getWorkingDir() != null) opts.workingDir(config.getWorkingDir());
+        if (config.getAddDir() != null) opts.addDir(config.getAddDir());
+        if (config.isOssProvider()) opts.oss(true);
+        if (config.getLocalProvider() != null) opts.localProvider(config.getLocalProvider());
+        if (config.isSearch()) opts.search(true);
+        if (config.getImage() != null) opts.image(config.getImage());
+        if (config.getConfigOverrides() != null) opts.configOverrides(config.getConfigOverrides());
+        if (config.isDangerouslyBypassApprovalsAndSandbox()) opts.dangerouslyBypassApprovalsAndSandbox(true);
+        if (config.isDangerouslyBypassHookTrust()) opts.dangerouslyBypassHookTrust(true);
+        if (config.isStrictConfig()) opts.strictConfig(true);
+        if (config.getEnable() != null) opts.enable(config.getEnable());
+        if (config.getDisable() != null) opts.disable(config.getDisable());
+        if (config.isNoAltScreen()) opts.noAltScreen(true);
         return opts;
     }
 
