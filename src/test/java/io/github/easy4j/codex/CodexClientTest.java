@@ -705,6 +705,28 @@ class CodexClientTest {
     // ----------------------------------------------------------------
 
     @Test
+    void shouldHonorJsonOutputFalseForDefaultExec() {
+        CodexClientConfig config = echoConfig();
+        config.setJsonOutput(false);
+
+        CodexCliResult result = new CodexClient(config).exec("hello");
+
+        assertFalse(result.getStdout().contains("--json"),
+                "normal exec must honor CodexClientConfig.jsonOutput=false");
+    }
+
+    @Test
+    void shouldPropagateNoAltScreenToDefaultInteractiveSession() {
+        CodexClientConfig config = echoConfig();
+        config.setNoAltScreen(true);
+
+        CodexCliResult result = new CodexClient(config).startSession("hello");
+
+        assertTrue(result.getStdout().contains("--no-alt-screen"),
+                "default interactive session must honor noAltScreen");
+    }
+
+    @Test
     void shouldPropagateConfigDefaultsToExecOptions() {
         CodexClientConfig config = echoConfig();
         config.setDefaultModel("gpt-5");
