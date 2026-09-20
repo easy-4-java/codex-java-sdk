@@ -93,7 +93,7 @@ public class CodexCliExecutor {
      * @return a {@link CodexCliResult} describing the outcome; never {@code null}.
      */
     public CodexCliResult execute(String... args) {
-        return runProcess(null, args);
+        return runProcess(null, config.getLocalTimeoutSeconds() * 1000L, args);
     }
 
     /**
@@ -111,10 +111,14 @@ public class CodexCliExecutor {
      * @return a {@link CodexCliResult} describing the outcome; never {@code null}.
      */
     public CodexCliResult executeWithStdin(String stdin, String... args) {
-        return runProcess(stdin, args);
+        return runProcess(stdin, config.getLocalTimeoutSeconds() * 1000L, args);
     }
 
-    private CodexCliResult runProcess(String stdin, String... args) {
+    private CodexCliResult executeWithTimeoutSeconds(int timeoutSeconds, String... args) {
+        return runProcess(null, timeoutSeconds * 1000L, args);
+    }
+
+    private CodexCliResult runProcess(String stdin, long timeoutMs, String... args) {
         CommandLine cmd = CommandLine.parse(config.getLocalExecutable());
         for (String arg : args) {
             if (arg != null) {
@@ -136,7 +140,6 @@ public class CodexCliExecutor {
         executor.setStreamHandler(new org.apache.commons.exec.PumpStreamHandler(stdout, stderr,
                 new ByteArrayInputStream(stdinBytes)));
 
-        long timeoutMs = config.getLocalTimeoutSeconds() * 1000L;
         ExecuteWatchdog watchdog = new ExecuteWatchdog(timeoutMs);
         executor.setWatchdog(watchdog);
 
@@ -201,7 +204,7 @@ public class CodexCliExecutor {
      */
     public boolean probe() {
         try {
-            CodexCliResult result = execute("--version");
+            CodexCliResult result = executeWithTimeoutSeconds(config.getLocalProbeTimeoutSeconds(), "--version");
             return result.isSuccess();
         } catch (Exception e) {
             return false;
