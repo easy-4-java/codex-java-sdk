@@ -416,6 +416,30 @@ class CodexAppServerTurnTest {
     }
 
     @Test
+    void shouldPreserveTurnCompletionStatus() {
+        CodexAppServerTurn turn = newTurn(AppServerTurnRequest.builder().prompt("hi").build(),
+                new ThreadMappingCache(10));
+
+        handshake(turn);
+        turn.handleFrame("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"thread\":{\"id\":\"th_1\"}}}");
+        turn.handleFrame("{\"method\":\"turn/completed\",\"params\":{\"turn\":{\"status\":\"completed\"}}}");
+
+        assertEquals("completed", turn.future().join().getFinishReason());
+    }
+
+    @Test
+    void shouldUseCompletedFinishReasonWhenServerOmitsStatus() {
+        CodexAppServerTurn turn = newTurn(AppServerTurnRequest.builder().prompt("hi").build(),
+                new ThreadMappingCache(10));
+
+        handshake(turn);
+        turn.handleFrame("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"thread\":{\"id\":\"th_1\"}}}");
+        turn.handleFrame("{\"method\":\"turn/completed\",\"params\":{}}");
+
+        assertEquals("completed", turn.future().join().getFinishReason());
+    }
+
+    @Test
     void shouldRememberThreadMappingOnTurnCompleted() {
         ThreadMappingCache cache = new ThreadMappingCache(10);
         CodexAppServerTurn turn = newTurn(
