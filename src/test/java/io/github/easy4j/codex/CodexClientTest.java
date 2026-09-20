@@ -243,6 +243,20 @@ class CodexClientTest {
     // ----------------------------------------------------------------
 
     @Test
+    void shouldForceJsonForExecAndParseWhenDefaultJsonOutputIsDisabled() {
+        CodexClientConfig config = new CodexClientConfig();
+        config.setLocalExecutable("/bin/sh " + JSON_FLAG_SCRIPT);
+        config.setLocalTimeoutSeconds(2);
+        config.setJsonOutput(false);
+
+        List<CodexEvent> events = new CodexClient(config).execAndParse("hello");
+
+        assertEquals(1, events.size(),
+                "execAndParse must force --json even when the normal exec default disables JSON");
+        assertEquals("done", events.get(0).getType());
+    }
+
+    @Test
     void shouldReturnEmptyListForBlankOutput() {
         // echo with no JSON-Lines content
         List<CodexEvent> events = echoClient().execAndParse("hello");
@@ -703,6 +717,28 @@ class CodexClientTest {
     // ----------------------------------------------------------------
     // default options from config
     // ----------------------------------------------------------------
+
+    @Test
+    void shouldHonorJsonOutputFalseForDefaultExec() {
+        CodexClientConfig config = echoConfig();
+        config.setJsonOutput(false);
+
+        CodexCliResult result = new CodexClient(config).exec("hello");
+
+        assertFalse(result.getStdout().contains("--json"),
+                "normal exec must honor CodexClientConfig.jsonOutput=false");
+    }
+
+    @Test
+    void shouldPropagateNoAltScreenToDefaultInteractiveSession() {
+        CodexClientConfig config = echoConfig();
+        config.setNoAltScreen(true);
+
+        CodexCliResult result = new CodexClient(config).startSession("hello");
+
+        assertTrue(result.getStdout().contains("--no-alt-screen"),
+                "default interactive session must honor noAltScreen");
+    }
 
     @Test
     void shouldPropagateConfigDefaultsToExecOptions() {
