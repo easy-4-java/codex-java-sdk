@@ -400,7 +400,7 @@ class CodexAppServerTurnTest {
 
         assertEquals(List.of("你好", "世界"), deltas);
         assertEquals("你好世界", turn.future().join().getContent());
-        assertEquals("stop", turn.future().join().getFinishReason());
+        assertEquals("completed", turn.future().join().getFinishReason());
     }
 
     @Test
@@ -520,7 +520,7 @@ class CodexAppServerTurnTest {
         turn.onClose(null, 1000, "bye");
 
         assertTrue(turn.future().isDone());
-        assertEquals("stop", turn.future().get(1, TimeUnit.SECONDS).getFinishReason());
+        assertEquals("completed", turn.future().get(1, TimeUnit.SECONDS).getFinishReason());
     }
 
     @Test
@@ -557,7 +557,7 @@ class CodexAppServerTurnTest {
         AppServerTurnResult result = turn.future().join();
         assertEquals("1234567890", result.getContent());
         assertEquals(List.of("12345", "67890"), deltas, "truncated-to-empty text must not emit a delta");
-        assertEquals("stop", result.getFinishReason());
+        assertEquals("completed", result.getFinishReason());
     }
 
     @Test
