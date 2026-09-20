@@ -143,7 +143,7 @@ SDK 覆盖：
 | :--- | :--- |
 | `io.github.easy4j.codex` | `CodexClient`、`CodexClientConfig` |
 | `io.github.easy4j.codex.cli` | `CodexCli`、`CodexCliExecutor`、`CodexCliResult` |
-| `io.github.easy4j.codex.appserver` | `CodexAppServerClient`、`CodexAppServerConfig`、`AppServerTurnRequest`、`AppServerTurnResult`、`ThreadMappingCache`、`CodexAppServerException` |
+| `io.github.easy4j.codex.appserver` | `CodexAppServerClient`、`CodexAppServerConfig`、`AppServerTurnRequest`、`AppServerTurnResult`、`CodexAppServerListener`、`ThreadMappingStore`、`ThreadMappingCache`、`CodexAppServerException` |
 | `io.github.easy4j.codex.model` | `CodexEvent`、`CodexSession`、`CodexDoctorReport` |
 
 ## 5. 安装
@@ -221,8 +221,16 @@ public class CodexDemo {
 | `dangerouslyBypassHookTrust` | boolean | `false` | 跳过 hook 信任检查 |
 | `strictConfig` | boolean | `false` | 遇到未知配置字段即报错 |
 | `enable` / `disable` | String[] | - | 启用 / 禁用的 feature |
+| `noAltScreen` | boolean | `false` | 默认交互会话传递 `--no-alt-screen` |
+
+运行时语义：
+- `localProbeTimeoutSeconds` 只用于 CLI 可用性探测；普通命令继续使用 `localTimeoutSeconds`。
+- `jsonOutput` 控制普通 `exec` 是否输出 JSON；`execAndParse` 因承诺解析 JSONL，会始终强制 `--json`。
+- `noAltScreen` 会进入默认交互会话的全局参数。
 
 ### 7.1 `CodexAppServerConfig`（app-server WebSocket 路线）
+
+> 仅 `feature/2.0.x`（JDK 17）与 `feature/3.0.x`（JDK 21）提供 App Server 路线；JDK 8 的 `feature/1.0.x` 明确保留为 CLI-only。
 
 > **升级注意（3.0.x.x.20260630+）**：CLI 路线的参数改为原样传给子进程——
 > 含空格的多词 prompt 不再被塞进字面双引号后发给 `codex`。CLI 非零退出现在
@@ -303,16 +311,27 @@ try (CodexAppServerClient client = new CodexAppServerClient(config)) {
 }
 ```
 
-生命周期调用走短连接并带文档规定的容错 `initialize` 握手；线程状态在
-服务端，因此原 turn 连接仍在流式输出时 `steerTurn` / `interruptTurn`
-同样可用。运行中的 turn 经 `AppServerTurnRequest.onTurnStarted` 与
-`AppServerTurnResult.getTurnId()` 暴露其 id。
+当前每次 app-server 操作都使用请求级 WebSocket 短连接。每条连接都会先完成
+`initialize` → `notifications/initialized`，再发送首个业务请求；同一连接上的
+WebSocket 写入严格串行，避免协议帧发生越序。发送失败会立即终止当前操作，不再等到
+后续读超时才暴露。
 
-一个 turn 对应：`thread/start`（`sessionKey` 已有映射时走 `thread/resume`）→
-`turn/start` → `item/completed`（仅 agent 消息对外呈现）→ `turn/completed`。
-未知通知只记录 debug 日志，不中断 turn。失败——连接、JSON-RPC 错误、
-`turn/failed`、`error`、提前关闭或读超时——统一以 `CodexAppServerException`
-抛出。
+相同且非空的 `sessionKey` 会串行执行，不同 session 仍可并发。默认
+`ThreadMappingCache` 是有界内存版 `ThreadMappingStore`；需要跨进程/重启持久化
+时可以注入自定义 store 实现。
+
+一个 turn 对应：`thread/start`（或 `thread/resume`）→ `turn/start` →
+`item/agentMessage/delta` 实时文本流 → `turn/completed`。现有 `onDelta`
+在服务器提供真实 delta 时会直接接收增量文本；对不提供 delta 的旧服务器，
+`item/completed` 仍作为兼容回退，并避免重复追加已经流式输出的内容。新增的
+`CodexAppServerListener` 可监听 turn start、文本 delta、item completed、token usage
+和 warning。运行中的 turn id 可通过 `AppServerTurnRequest.onTurnStarted` /
+listener 与 `AppServerTurnResult.getTurnId()` 获取。
+
+未知通知只记录 debug 日志，不中断 turn。连接、JSON-RPC 错误、`turn/failed`、
+`error`、WebSocket 发送失败、提前关闭或读超时统一以
+`CodexAppServerException` 暴露。成功完成时优先保留服务器返回的 turn status；
+服务器未提供时使用中性的 `completed`。
 
 ## 9. 测试与构建
 
@@ -322,20 +341,20 @@ try (CodexAppServerClient client = new CodexAppServerClient(config)) {
 
 - 构建配置了 JaCoCo Maven 插件（报告 + 绑定在 `verify` 阶段的 `check` 目标，
   行覆盖率规则为 90%；`haltOnFailure=false`）。
-- 活跃分支自带完整测试套件（`feature/3.0.x` 共 206 个测试），含针对进程内
-  假 app-server 的端到端 WebSocket 契约测试。
+- 各维护分支均有完整测试套件；2.0.x / 3.0.x 还包含进程内假 app-server 的端到端 WebSocket 契约测试，以及默认关闭、按需启用的真实 app-server 集成测试。
 - CI 工作流：`.github/workflows/ci.yml`。
 
 ## 10. 版本与分支
 
 | 分支 | JDK | 版本 | 说明 |
 | :--- | :--- | :--- | :--- |
-| `feature/1.0.x` | 8 | `1.0.x.*` | 当前分支，JDK 8 基线，活跃开发 |
-| `feature/2.0.x` | 17 | `2.0.x.*` | JDK 17 版本线 |
-| `feature/3.0.x` | 21 | `3.0.x.*` | JDK 21 版本线 |
+| `feature/1.0.x` | 8 | `1.0.x.*` | CLI 兼容线；不提供 app-server transport |
+| `feature/2.0.x` | 17 | `2.0.x.*` | App Server 协议/行为 canonical 版本线 |
+| `feature/3.0.x` | 21 | `3.0.x.*` | JDK 21 / Maven 4 / Jackson 3 forward-port 版本线 |
 
-维护策略：`1.0.x` 版本线接收针对 JDK 8 基线的缺陷修复与兼容性更新；面向新 JDK 的
-新特性在 `2.0.x` / `3.0.x` 版本线开发。发布物通过阿里云 Maven 仓库与 GitHub
+维护策略：公共 CLI 修复保持三条版本线一致；App Server 协议行为先在
+`feature/2.0.x` 验证，再 forward-port 到 `feature/3.0.x`；JDK 8 版本线明确保持
+CLI-only。发布物通过阿里云 Maven 仓库与 GitHub
 Releases 分发；项目尚未发布到 Maven Central。
 
 ## 11. 贡献与许可
