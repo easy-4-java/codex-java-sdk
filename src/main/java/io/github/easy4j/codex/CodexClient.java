@@ -161,7 +161,7 @@ public class CodexClient implements AutoCloseable {
      *         empty or unparseable.
      */
     public List<CodexEvent> execAndParse(String prompt) {
-        CodexCliResult result = exec(prompt);
+        CodexCliResult result = exec(defaultOptions(prompt).json(true));
         return parseJsonlOutput(result.getStdout());
     }
 
