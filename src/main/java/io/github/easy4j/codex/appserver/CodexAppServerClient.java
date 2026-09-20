@@ -77,7 +77,7 @@ public class CodexAppServerClient implements AutoCloseable {
     private final CodexAppServerConfig config;
     private final ObjectMapper objectMapper =
             JsonMapper.builder().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build();
-    private final ThreadMappingCache threadBySession;
+    private final ThreadMappingStore threadBySession;
     private final SessionExecutionCoordinator sessionCoordinator = new SessionExecutionCoordinator();
     private final Object httpClientLock = new Object();
     private final ExecutorService clientExecutor = Executors.newCachedThreadPool(r -> {
@@ -96,8 +96,15 @@ public class CodexAppServerClient implements AutoCloseable {
      * @throws NullPointerException if {@code config} is {@code null}.
      */
     public CodexAppServerClient(CodexAppServerConfig config) {
+        this(config, new ThreadMappingCache(
+                Objects.requireNonNull(config, "config").getMaxSessionMappings()));
+    }
+
+    public CodexAppServerClient(
+            CodexAppServerConfig config,
+            ThreadMappingStore threadMappingStore) {
         this.config = Objects.requireNonNull(config, "config");
-        this.threadBySession = new ThreadMappingCache(config.getMaxSessionMappings());
+        this.threadBySession = Objects.requireNonNull(threadMappingStore, "threadMappingStore");
     }
 
     /**
