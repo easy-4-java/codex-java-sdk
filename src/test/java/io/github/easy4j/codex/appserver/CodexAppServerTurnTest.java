@@ -308,6 +308,49 @@ class CodexAppServerTurnTest {
         assertFalse(turn.future().isDone());
     }
 
+
+    @Test
+    void shouldStreamRealAgentMessageDeltas() {
+        List<String> deltas = new ArrayList<>();
+        CodexAppServerTurn turn = newTurn(
+                AppServerTurnRequest.builder().prompt("hi").onDelta(deltas::add).build(),
+                new ThreadMappingCache(10));
+
+        handshake(turn);
+        turn.handleFrame("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"thread\":{\"id\":\"th_1\"}}}");
+        turn.handleFrame("{\"method\":\"item/agentMessage/delta\",\"params\":{\"threadId\":\"th_1\","
+                + "\"turnId\":\"turn_1\",\"itemId\":\"item_1\",\"delta\":\"你\"}}");
+        turn.handleFrame("{\"method\":\"item/agentMessage/delta\",\"params\":{\"threadId\":\"th_1\","
+                + "\"turnId\":\"turn_1\",\"itemId\":\"item_1\",\"delta\":\"好\"}}");
+        turn.handleFrame("{\"method\":\"turn/completed\",\"params\":{}}");
+
+        assertEquals(List.of("你", "好"), deltas);
+        assertEquals("你好", turn.future().join().getContent());
+    }
+
+    @Test
+    void shouldNotDuplicateCompletedMessageAfterStreamingDeltas() {
+        List<String> deltas = new ArrayList<>();
+        CodexAppServerTurn turn = newTurn(
+                AppServerTurnRequest.builder().prompt("hi").onDelta(deltas::add).build(),
+                new ThreadMappingCache(10));
+
+        handshake(turn);
+        turn.handleFrame("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"thread\":{\"id\":\"th_1\"}}}");
+        turn.handleFrame("{\"method\":\"item/agentMessage/delta\",\"params\":{\"threadId\":\"th_1\","
+                + "\"turnId\":\"turn_1\",\"itemId\":\"item_1\",\"delta\":\"你\"}}");
+        turn.handleFrame("{\"method\":\"item/agentMessage/delta\",\"params\":{\"threadId\":\"th_1\","
+                + "\"turnId\":\"turn_1\",\"itemId\":\"item_1\",\"delta\":\"好\"}}");
+        turn.handleFrame("{\"method\":\"item/completed\",\"params\":{\"item\":{\"id\":\"item_1\","
+                + "\"type\":\"agentMessage\",\"text\":\"你好\"}}}");
+        turn.handleFrame("{\"method\":\"turn/completed\",\"params\":{}}");
+
+        assertEquals(List.of("你", "好"), deltas,
+                "item/completed must not re-emit text that already arrived as real deltas");
+        assertEquals("你好", turn.future().join().getContent(),
+                "completed item must not duplicate already-streamed content");
+    }
+
     @Test
     void shouldCollectAgentMessageItemsAndIgnoreOthers() {
         List<String> deltas = new ArrayList<>();
