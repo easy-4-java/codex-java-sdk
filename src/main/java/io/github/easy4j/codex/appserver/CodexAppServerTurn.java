@@ -266,6 +266,9 @@ class CodexAppServerTurn implements WebSocket.Listener {
             if (Objects.nonNull(request.getOnTurnStarted())) {
                 request.getOnTurnStarted().accept(reported);
             }
+            if (Objects.nonNull(request.getListener())) {
+                request.getListener().onTurnStarted(reported);
+            }
         }
     }
 
@@ -283,6 +286,9 @@ class CodexAppServerTurn implements WebSocket.Listener {
         if (!applied.isEmpty() && Objects.nonNull(request.getOnDelta())) {
             request.getOnDelta().accept(applied);
         }
+        if (!applied.isEmpty() && Objects.nonNull(request.getListener())) {
+            request.getListener().onTextDelta(applied);
+        }
     }
 
     private void onItemCompleted(JsonNode params) {
@@ -297,6 +303,9 @@ class CodexAppServerTurn implements WebSocket.Listener {
             return;
         }
         String itemId = firstText(item, "id", "itemId", "item_id");
+        if (Objects.nonNull(request.getListener())) {
+            request.getListener().onItemCompleted(type, text);
+        }
         if (hasText(itemId) && streamedAgentItemIds.contains(itemId)) {
             return;
         }
