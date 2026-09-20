@@ -30,6 +30,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.json.JsonMapper;
@@ -52,7 +55,9 @@ final class FakeCodexAppServer implements AutoCloseable {
     private final ServerSocket serverSocket;
     private final List<String> receivedFrames = new CopyOnWriteArrayList<>();
     private final Thread acceptLoop;
+    private final AtomicInteger turnStarts = new AtomicInteger();
 
+    private volatile CountDownLatch turnCompletionGate = new CountDownLatch(0);
     private volatile boolean authorizationSeen;
     private volatile boolean closed;
 
@@ -78,19 +83,48 @@ final class FakeCodexAppServer implements AutoCloseable {
         return authorizationSeen;
     }
 
+    void holdTurnCompletions() {
+        turnCompletionGate = new CountDownLatch(1);
+    }
+
+    void releaseTurnCompletions() {
+        turnCompletionGate.countDown();
+    }
+
+    int turnStartCount() {
+        return turnStarts.get();
+    }
+
+    boolean awaitTurnStarts(int expected, long timeoutMillis) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        while (System.nanoTime() < deadline) {
+            if (turnStarts.get() >= expected) {
+                return true;
+            }
+            Thread.sleep(10L);
+        }
+        return turnStarts.get() >= expected;
+    }
+
     private void acceptLoop() {
         while (!closed) {
-            try (Socket socket = serverSocket.accept()) {
-                handleConnection(socket);
+            try {
+                Socket socket = serverSocket.accept();
+                Thread connection = new Thread(() -> {
+                    try (Socket closeable = socket) {
+                        handleConnection(closeable);
+                    } catch (Exception ex) {
+                        if (!closed) {
+                            ex.printStackTrace();
+                        }
+                    }
+                }, "fake-codex-app-server-connection");
+                connection.setDaemon(true);
+                connection.start();
             } catch (IOException ex) {
                 if (!closed) {
-                    // Accept failures on a listening socket mean it was closed; stop quietly.
                     return;
                 }
-            } catch (Exception ex) {
-                // A runtime failure mid-connection must be visible — a silent
-                // thread death here looks exactly like a client-side timeout.
-                ex.printStackTrace();
             }
         }
     }
@@ -163,6 +197,7 @@ final class FakeCodexAppServer implements AutoCloseable {
             return;
         }
         if ("turn/start".equals(method)) {
+            turnStarts.incrementAndGet();
             sendText(out, "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"result\":{}}");
             sendText(out, "{\"method\":\"turn/started\",\"params\":{\"threadId\":\"th_e2e\",\"turnId\":\"turn_1\"}}");
             sendText(out, "{\"method\":\"thread/tokenUsage/updated\",\"params\":{\"tokens\":1}}");
@@ -172,6 +207,14 @@ final class FakeCodexAppServer implements AutoCloseable {
                     + "{\"item\":{\"type\":\"agentMessage\",\"text\":\"你好\"}}}");
             sendText(out, "{\"method\":\"item/completed\",\"params\":"
                     + "{\"item\":{\"itemType\":\"agent_message\",\"content\":\"世界\"}}}");
+            try {
+                if (!turnCompletionGate.await(5, TimeUnit.SECONDS)) {
+                    throw new IOException("Timed out waiting to release fake turn completion");
+                }
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Interrupted waiting to release fake turn completion", ex);
+            }
             sendText(out, "{\"method\":\"turn/completed\",\"params\":"
                     + "{\"threadId\":\"th_e2e\",\"message\":\"fallback-unused\"}}");
             return;
