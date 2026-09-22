@@ -133,3 +133,4 @@ CLAUDE.md
 *.http
 *.json
 qodana.yaml
+.mimosa/
