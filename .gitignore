@@ -24,7 +24,6 @@ target/
 dependency-reduced-pom.xml
 pom.xml.versionsBackup
 .flattened-pom.xml
-!.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
 
@@ -54,6 +53,7 @@ transaction-logs
 
 ### Archives ###
 *.jar
+!.mvn/wrapper/maven-wrapper.jar
 *.war
 *.ear
 *.tar
