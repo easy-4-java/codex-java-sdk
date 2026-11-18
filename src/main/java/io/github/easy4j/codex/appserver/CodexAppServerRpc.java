@@ -64,6 +64,7 @@ class CodexAppServerRpc implements WebSocket.Listener {
     private final StringBuilder frameBuffer = new StringBuilder();
 
     private volatile WebSocket webSocket;
+    private volatile CodexWebSocketSender sender;
     private volatile boolean mainRequestSent;
 
     CodexAppServerRpc(CodexAppServerConfig config,
@@ -116,6 +117,7 @@ class CodexAppServerRpc implements WebSocket.Listener {
     @Override
     public void onOpen(WebSocket socket) {
         this.webSocket = socket;
+        this.sender = new CodexWebSocketSender(socket);
         socket.request(1);
         // Tolerant initialize handshake: the app-server spec requires it, but
         // older daemons may not implement it — an error response is logged and
@@ -223,7 +225,12 @@ class CodexAppServerRpc implements WebSocket.Listener {
                     ? codexError : new CodexAppServerException("Codex RPC failed", error));
             return null;
         });
-        sendText(toJson(payload));
+        sendText(toJson(payload)).whenComplete((ignored, error) -> {
+            if (Objects.nonNull(error)) {
+                pendingRpcs.remove(id, rpc);
+                fail(new CodexAppServerException("Codex RPC send failed", error));
+            }
+        });
     }
 
     private void handleInitializeSettled() {
@@ -238,7 +245,7 @@ class CodexAppServerRpc implements WebSocket.Listener {
         payload.put("jsonrpc", "2.0");
         payload.put("method", CodexAppServerProtocol.INITIALIZED);
         payload.put("params", java.util.Collections.emptyMap());
-        socket.sendText(toJson(payload), true).whenComplete((w, error) -> {
+        sendText(toJson(payload)).whenComplete((w, error) -> {
             if (Objects.nonNull(error)) {
                 fail(new CodexAppServerException("Codex initialized notification failed", error));
                 return;
@@ -247,11 +254,13 @@ class CodexAppServerRpc implements WebSocket.Listener {
         });
     }
 
-    private void sendText(String text) {
-        WebSocket socket = webSocket;
-        if (Objects.nonNull(socket)) {
-            socket.sendText(text, true);
+    private CompletionStage<WebSocket> sendText(String text) {
+        CodexWebSocketSender currentSender = sender;
+        if (Objects.isNull(currentSender)) {
+            return CompletableFuture.failedFuture(
+                    new CodexAppServerException("Codex WebSocket is not connected"));
         }
+        return currentSender.send(text);
     }
 
     private void fail(Throwable error) {
