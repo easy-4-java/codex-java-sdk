@@ -1,7 +1,7 @@
 # CI workflow for the feature/3.0.x line (JDK 21)
 #
 # Triggers:
-#   - push / pull_request on the feature/3.0.x branch
+#   - push / pull_request on the feature/3.0.x and test/20261118 branches
 #   - manual workflow_dispatch
 #
 # Runs `./mvnw -B clean verify` (Maven 4 via the checked-in wrapper — the
@@ -11,9 +11,9 @@ name: CI
 
 on:
   push:
-    branches: [feature/3.0.x]
+    branches: [feature/3.0.x, test/20261118]
   pull_request:
-    branches: [feature/3.0.x]
+    branches: [feature/3.0.x, test/20261118]
   workflow_dispatch:
 
 permissions:
